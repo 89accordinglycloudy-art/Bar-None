@@ -439,8 +439,8 @@ io.on('connection', (socket) => {
     cb && cb({ ok: true });
   });
 
-  socket.on('draft', ({ text }) => { if (myTurn() && room.turn.stage === 'writing') me().draft = String(text || '').slice(0, 300); });
-  socket.on('submit_bar', ({ text }) => { if (myTurn() && room.turn.stage === 'writing') { clearTimeout(room.timer); submitBar(room, me(), String(text || ''), false); } });
+  socket.on('draft', ({ text }) => { if (myTurn() && room.turn.stage === 'writing') me().draft = String(text || '').slice(0, 600); });
+  socket.on('submit_bar', ({ text }) => { if (myTurn() && room.turn.stage === 'writing') { clearTimeout(room.timer); submitBar(room, me(), String(text || '').slice(0, 600), false); } });
   socket.on('end_turn', () => {
     if (!myTurn()) return;
     if (room.turn.stage === 'action') { clearTimeout(room.timer); endActionPhase(room); }
