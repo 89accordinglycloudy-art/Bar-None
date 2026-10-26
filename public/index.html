@@ -80,6 +80,8 @@
     <button id="create">Open a room</button>
     <input id="code" placeholder="CODE" maxlength="4" style="text-transform:uppercase; width:90px">
     <button id="joinBtn" class="alt">Join a room</button>
+    <br><button id="soloBtn" class="alt">Play solo — vs 2 ghost writers 👻</button>
+    <span style="color:var(--ash); font-size:12.5px">Alone? Ghost writers take the other seats: same cards, same beat, they write, sabotage, and vote.</span>
     <button id="rejoinBtn" class="alt" style="display:none"></button>
     <p id="err" style="color:#ff4d5e"></p>
     <p id="streakLine" style="color:var(--ash); font-size:12.5px"></p>
@@ -93,6 +95,7 @@
       <li>One prompt card and one dirty trick per turn. Write your bar off the prompt before the timer dies — and when it dies, whatever you've typed is what you wrote. <b>Locked is locked.</b></li>
       <li>Sabotage lands. A shield blocks one hit. An empty bar still counts — it just counts as a freeze, and the room remembers.</li>
       <li>First writer to 8 bars triggers the last round. Then the room votes on the verses. Talk is cheap. Bars decide.</li>
+      <li><b>Solo?</b> Ghost writers take the other seats — same cards, same beat, they write, sabotage, and vote. Practice alone, play for real when the room fills.</li>
     </ol>
   </div>
 </div>
@@ -186,6 +189,7 @@ function paintStreak() { $('streakLine').textContent = streak.best > 0 ? `Your s
 paintStreak();
 
 $('create').onclick = () => socket.emit('create_room', { name: $('name').value, streak: streak.cur }, r => r.ok ? enter(r.code) : $('err').textContent = r.error);
+$('soloBtn').onclick = () => socket.emit('create_solo', { name: $('name').value, streak: streak.cur, bots: 2 }, r => r.ok ? enter(r.code) : $('err').textContent = r.error);
 $('joinBtn').onclick = () => {
   const name = $('name').value, code = $('code').value;
   socket.emit('join_room', { name, code, streak: streak.cur }, r => {
@@ -269,7 +273,7 @@ function render() {
   $('phase').textContent = S.phase;
   $('deckA').textContent = S.decks.action; $('deckS').textContent = S.decks.sound;
   $('players').innerHTML = S.players.map((p, i) =>
-    `<div>${S.turn && S.turn.playerId === p.id ? '▶ ' : ''}${p.name}${p.id === S.hostId ? ' (host)' : ''} — ${p.bars}/8 bars · ${p.handCount} cards${p.streak ? ` · streak ${p.streak}` : ''}${p.shield ? ' · 🛡' : ''}${p.connected ? '' : ' · gone'}</div>`).join('');
+    `<div>${S.turn && S.turn.playerId === p.id ? '▶ ' : ''}${p.name}${p.isBot ? ' 👻 (ghost)' : ''}${p.id === S.hostId ? ' (host)' : ''} — ${p.bars}/8 bars · ${p.handCount} cards${p.streak ? ` · streak ${p.streak}` : ''}${p.shield ? ' · 🛡' : ''}${p.connected ? '' : ' · gone'}</div>`).join('');
   const canStart = (S.phase === 'lobby' || S.phase === 'finished') && S.hostId === myId && S.players.length >= 2;
   $('start').style.display = canStart ? '' : 'none';
   $('start').textContent = S.phase === 'finished' ? 'Run it back' : 'Start the fight';
