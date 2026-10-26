@@ -42,9 +42,152 @@ function drawFrom(deck, discardPile) {
 }
 const DIFF_RANK = { easy: 0, medium: 1, hard: 2 };
 
+// ---------- Solo mode: ghost writers ----------
+// Server-side bot writers so one human can play a full match alone: same
+// decks, same beat, same sabotage, same vote. Bots assemble their bars from
+// a template bank keyed to the prompt they drew — they are sparring partners
+// (practice + learning the game + content clips), not poets.
+const BOT_NAMES = ['GHOST-9', 'DEAD MIC', 'PALE SCRIBE'];
+const BOT_BARS = [
+  'I turned {P} into a prayer that the basement never answered',
+  '{P} on my chest and I still walked in like I owned the dark',
+  'they counted me out at {P}, now the whole room whispers it back',
+  'I keep {P} in my pocket next to change I will never spend',
+  'the beat bent sideways and {P} was the only thing standing',
+  'I wrote {P} on the wall in chalk so the rain could read it twice',
+  'no halo, no rescue, just {P} and a busted metronome heart',
+  'I buried {P} under the floorboards and it still knocks at night',
+  '{P} tastes like copper and bad weather coming over the hill',
+  'they sold me {P} as a warning and I framed it like a diploma',
+  'I have been running from {P} so long my shadow files complaints',
+  'every scar spells {P} if you read it under a black light',
+  'I put {P} on the scale and it outweighed every excuse I had',
+  'the preacher said {P}, the congregation just checked the exits',
+  'I stitched {P} into the lining so the cold stays honest',
+  '{P} again — same ghost, new room, same locked door',
+  'my pen bleeds {P} every time the snare forgets to blink',
+  'I traded sleep for {P} and the exchange rate is criminal',
+  'they hear {P} in my voice before I even open my mouth',
+  'I keep {P} loaded like the last round nobody talks about',
+  'somewhere under {P} there is a version of me still standing',
+  'the mirror filed a report and the headline was {P}',
+];
+function botBarText(p) {
+  const prompt = p.currentPrompt || 'Static';
+  const fresh = BOT_BARS.map((b, i) => i).filter(i => !(p.usedBars || []).includes(i));
+  const idx = fresh.length ? pick(fresh) : rnd(BOT_BARS.length);
+  p.usedBars = [...(p.usedBars || []), idx];
+  return BOT_BARS[idx].replace('{P}', prompt.toLowerCase());
+}
+function humanPresent(room) { return room.players.some(p => !p.isBot && p.connected); }
+
+// One driver per solo room, ticking like the watchdog. It acts once per
+// stage (keyed by match + turn sequence + stage), after a human-feeling
+// delay, and only while a human is actually in the room.
+function startBotDriver(room) {
+  room.botDriver = setInterval(() => {
+    if (!rooms.has(room.code)) { clearInterval(room.botDriver); return; }
+    if (!humanPresent(room)) return;
+    try {
+      if (room.phase === 'voting') {
+        if (Date.now() - (room.votingStartedAt || 0) < 3000) return;
+        const bot = room.players.find(p => p.isBot && !room.votes[p.id]);
+        if (bot) botVote(room, bot);
+        return;
+      }
+      if (room.phase !== 'playing' || !room.turn) return;
+      const p = cur(room);
+      if (!p || !p.isBot) return;
+      const key = `${room.matchId}:${room.turnSeq || 0}:${room.turn.stage}`;
+      if (room._botKey === key) return;
+      room._botKey = key;
+      const delay = room.turn.stage === 'writing' ? 2600 + rnd(2600)
+        : room.turn.stage === 'discard' ? 900
+        : 1300 + rnd(1400);
+      setTimeout(() => {
+        if (!rooms.has(room.code) || room.phase !== 'playing' || !room.turn) return;
+        if (cur(room) !== p || room.turn.stage !== room._botStageOf(key)) return;
+        try { botAct(room, p); } catch (e) { console.error('bot', e); }
+      }, delay);
+      room._botStageOf = (k) => k.split(':').pop();
+    } catch (e) { console.error('bot driver', e); }
+  }, 800);
+}
+function botVote(room, bot) {
+  // Ghosts vote for the fullest verse that isn't theirs — write more, win more.
+  const others = room.players.filter(p => p.id !== bot.id);
+  const scored = others.map(p => ({ p, len: p.verse.reduce((a, v) => a + (v.text || '').length, 0) }));
+  const max = Math.max(...scored.map(s => s.len));
+  const top = scored.filter(s => s.len === max);
+  room.votes[bot.id] = pick(top).p.id;
+  log(room, `${bot.name} casts a vote from beyond.`);
+  const connected = room.players.filter(p => p.connected);
+  if (connected.every(p => room.votes[p.id])) tallyVotes(room); else sync(room);
+}
+function botPlayBar(room, p) {
+  const idx = p.hand.findIndex(c => c.type === 'bar');
+  if (idx < 0) return false;
+  const card = p.hand.splice(idx, 1)[0];
+  p.playedBar = true;
+  let promptCard = card;
+  if (p.pendingUpgrade) {
+    p.pendingUpgrade = false;
+    const better = drawBarUpgrade(room, DIFF_RANK[card.difficulty]);
+    if (better) { room.actionDiscard.push(card); promptCard = better; log(room, `${p.name}'s prompt was upgraded to HARD territory: ${better.prompt}.`); }
+  }
+  p.currentPrompt = promptCard.prompt;
+  log(room, `${p.name} takes the prompt: ${promptCard.prompt}.`);
+  beginWriting(room);
+  return true;
+}
+function botPlayTactical(room, p) {
+  if (p.playedTactical) return;
+  // Playable without a discard choice; swapCard is skipped (too fiddly to fake).
+  const usable = p.hand.filter(c => c.type !== 'bar' && c.fx !== 'swapCard' && !(c.fx === 'shield' && p.shield));
+  if (!usable.length || Math.random() < 0.3) return;
+  const pref = ['shield', 'draw', 'extraTime', 'cleanse', 'flowSelf', 'wildSound', 'randomSound', 'upgradePrompt', 'attachReq', 'stealCard', 'forceDiscard', 'swapBarCard'];
+  usable.sort((a, b) => pref.indexOf(a.fx) - pref.indexOf(b.fx));
+  const card = usable[0];
+  let targetId = null;
+  if (card.targeted) {
+    const others = room.players.filter(o => o.id !== p.id);
+    const human = others.find(o => !o.isBot);
+    targetId = (human && Math.random() < 0.7 ? human : pick(others)).id;
+  }
+  const idx = p.hand.indexOf(card);
+  p.hand.splice(idx, 1);
+  const err = applyTactical(room, p, card, targetId, null);
+  if (err) { p.hand.splice(idx, 0, card); return; }
+  p.playedTactical = true;
+  room.actionDiscard.push(card);
+  log(room, `${p.name} plays ${card.name}.`);
+  sync(room);
+}
+function botAct(room, p) {
+  const stage = room.turn.stage;
+  if (stage === 'sound') { resolveSound(room, Math.random() < 0.75); return; }
+  if (stage === 'action') {
+    botPlayTactical(room, p);
+    if (room.turn && room.turn.stage === 'action' && cur(room) === p) {
+      if (!botPlayBar(room, p)) endActionPhase(room);
+    }
+    return;
+  }
+  if (stage === 'writing') {
+    const text = botBarText(p);
+    p.draft = text;
+    submitBar(room, p, text, false);
+    return;
+  }
+  if (stage === 'discard') {
+    while (p.hand.length > HAND_LIMIT) room.actionDiscard.push(p.hand.splice(rnd(p.hand.length), 1)[0]);
+    advance(room);
+  }
+}
+
 // ---------- state ----------
-function newPlayer(id, name, streak) {
-  return { id, name, streak: Number(streak) || 0, connected: true, hand: [], verse: [], shield: false, drawnSound: null, draft: '',
+function newPlayer(id, name, streak, isBot) {
+  return { id, name, streak: Number(streak) || 0, connected: true, isBot: !!isBot, usedBars: [], hand: [], verse: [], shield: false, drawnSound: null, draft: '',
     pendingReqs: [], pendingUpgrade: false, turnExtraTime: 0, playedBar: false, playedTactical: false, currentPrompt: null };
 }
 function log(room, msg) { room.log.push(msg); if (room.log.length > 30) room.log.shift(); }
@@ -52,7 +195,7 @@ function log(room, msg) { room.log.push(msg); if (room.log.length > 30) room.log
 function publicState(room) {
   return {
     code: room.code, phase: room.phase, hostId: room.hostId, direction: room.direction, mode: room.mode || 'basement',
-    players: room.players.map(p => ({ id: p.id, name: p.name, streak: p.streak, bars: p.verse.length, handCount: p.hand.length, shield: p.shield, connected: p.connected, verse: p.verse })),
+    players: room.players.map(p => ({ id: p.id, name: p.name, streak: p.streak, isBot: !!p.isBot, bars: p.verse.length, handCount: p.hand.length, shield: p.shield, connected: p.connected, verse: p.verse })),
     matchId: room.matchId || 0,
     voting: room.phase === 'voting' ? { votedIds: Object.keys(room.votes || {}), deadline: room.deadline } : null,
     results: room.results || null,
@@ -77,7 +220,7 @@ function startWatchdog(room) {
   room.watchdog = setInterval(() => {
     if (!rooms.has(room.code)) { clearInterval(room.watchdog); return; }
     if (room.phase !== 'playing' || !room.turn) return;
-    if (!room.players.some(p => p.connected)) return; // empty room: frozen in grace, don't play it out
+    if (!humanPresent(room)) return; // empty room: frozen in grace, don't play it out (bots don't count)
     if (Date.now() < room.deadline + 2000) return;
     if (process.env.BN_DEBUG_WATCHDOG) console.log('WATCHDOG FIRE:', room.turn.stage, 'overdue by', Date.now() - room.deadline, 'ms');
     const p = cur(room);
@@ -136,6 +279,7 @@ function startMatch(room) {
 
 function startTurn(room) {
   const p = cur(room);
+  room.turnSeq = (room.turnSeq || 0) + 1;
   room.turn = { playerId: p.id, stage: 'sound' };
   p.playedBar = false; p.playedTactical = false; p.currentPrompt = null; p.draft = '';
   p.drawnSound = drawFrom(room.soundDeck, room.soundDiscard);
@@ -257,7 +401,7 @@ function advance(room) {
 }
 
 function finishMatch(room) {
-  room.phase = 'voting'; room.turn = null; room.votes = {};
+  room.phase = 'voting'; room.turn = null; room.votes = {}; room.votingStartedAt = Date.now();
   log(room, 'Verses on the table — the room votes. No voting for yourself.');
   setTimer(room, T.vote, () => { if (room.phase === 'voting') tallyVotes(room); });
   sync(room);
@@ -343,6 +487,20 @@ io.on('connection', (socket) => {
     player = newPlayer(socket.id, String(name || 'Player').slice(0, 20), streak);
     room.players.push(player); rooms.set(code, room); socket.join(code);
     startWatchdog(room);
+    cb && cb({ ok: true, code }); sync(room);
+  });
+
+  socket.on('create_solo', ({ name, streak, bots }, cb) => {
+    const code = makeCode();
+    room = { code, phase: 'lobby', hostId: socket.id, players: [], turnIndex: 0, direction: 1, turn: null, log: [], timer: null, deadline: 0, activeSounds: {}, boardFx: null, actionDeck: [], actionDiscard: [], soundDeck: [], soundDiscard: [], winner: null, finalTurnsLeft: null, votes: {}, results: null, finishSeq: [], matchId: 0, mode: 'basement', beat: null, solo: true };
+    player = newPlayer(socket.id, String(name || 'Player').slice(0, 20), streak);
+    room.players.push(player);
+    const nBots = Math.max(1, Math.min(3, Number(bots) || 2));
+    for (let i = 0; i < nBots; i++) room.players.push(newPlayer(`bot_${code}_${i}`, BOT_NAMES[i], 0, true));
+    rooms.set(code, room); socket.join(code);
+    startWatchdog(room);
+    startBotDriver(room);
+    log(room, `${nBots} ghost writers slide into the booth. Solo run — same cards, same beat, they write back.`);
     cb && cb({ ok: true, code }); sync(room);
   });
 
@@ -458,9 +616,11 @@ io.on('connection', (socket) => {
     player.connected = false;
     if (room.phase === 'lobby') {
       room.players = room.players.filter(p => p.id !== player.id);
-      if (room.hostId === player.id && room.players.length) room.hostId = room.players[0].id;
+      const humans = room.players.filter(p => !p.isBot);
+      if (!humans.length) { rooms.delete(room.code); return; } // solo lobby: ghosts leave with the human
+      if (room.hostId === player.id) room.hostId = humans[0].id;
     }
-    if (room.players.every(p => !p.connected)) {
+    if (!humanPresent(room)) {
       clearTimeout(room.timer);
       if (room.phase === 'playing' || room.phase === 'voting') {
         // Grace window: keep the room (and every seat) alive for 3 minutes so
