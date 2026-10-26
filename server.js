@@ -40,14 +40,67 @@ function drawFrom(deck, discardPile) {
   if (!deck.length) { deck.push(...discardPile.splice(0)); for (let i = deck.length - 1; i > 0; i--) { const j = rnd(i + 1); [deck[i], deck[j]] = [deck[j], deck[i]]; } }
   return deck.pop() || null;
 }
-const DIFF_RANK = { easy: 0, medium: 1, hard: 2 };
+const DIFF_RANK = { easy: 0, happy: 0, medium: 1, absurd: 1, hard: 2 };
 
 // ---------- Solo mode: ghost writers ----------
 // Server-side bot writers so one human can play a full match alone: same
 // decks, same beat, same sabotage, same vote. Bots assemble their bars from
 // a template bank keyed to the prompt they drew — they are sparring partners
 // (practice + learning the game + content clips), not poets.
-const BOT_NAMES = ['GHOST-9', 'DEAD MIC', 'PALE SCRIBE'];
+const BRAG_BARS = [
+  'I turned {P} into a headline, you are barely a footnote in it',
+  '{P} is my warm-up, I do this half asleep with the rent due',
+  'they study {P} in a lab somewhere and still cannot copy the recipe',
+  'I made {P} look expensive, you make everything look borrowed',
+  'put {P} on a shirt, I am selling merch off your favorite moment',
+  'I body {P} so clean they should charge me for the cleanup',
+  '{P} stepped up confident and left looking for its confidence',
+  'my pen does push-ups, {P} never stood a chance on paper',
+  'I turned {P} into a trophy and put it where the dust cant reach',
+  'they chant {P} back at me now, I just nod like I planned it',
+  'I am the plot twist in {P}, everybody else is an extra',
+  '{P} wanted smoke, I brought the whole barbecue and the playlist',
+  'I sign {P} in big letters, winners do not do small print',
+  'call it {P}, call it light work, call it a warning to the next one',
+];
+const SUNNY_BARS = [
+  'I flipped {P} into a block party, everybody fed, everybody dancing',
+  '{P} tried to rain on me, so I brought a slip-n-slide and a speaker',
+  'I put {P} in the group chat and even grandma sent fire emojis',
+  'turned {P} into lemonade and sold out the whole front porch',
+  'I wear {P} like a new fit on the first warm day of the year',
+  '{P} showed up gloomy, I introduced it to the cookout DJ',
+  'I high-fived {P} so hard the whole neighborhood woke up smiling',
+  'my recipe for {P}: extra seasoning, second helpings, no bad vibes',
+  'I turned {P} into a parade and let the kids lead it',
+  '{P} plus a little sunshine equals a story worth retelling',
+  'I planted {P} in the yard and it grew back as a fruit tree',
+  'we do not dodge {P} over here, we two-step right through it',
+  'I put {P} on the fridge door, right next to the good drawings',
+  '{P} came with clouds, I came with a kite and nowhere to be sad',
+];
+const SMOOTH_BARS = [
+  'I whispered {P} slow and the whole room leaned in closer',
+  '{P} sounds better in a low voice with the lights down soft',
+  'I let {P} breathe between the notes, patience is the perfume',
+  'velvet on the tongue, {P} goes down like the last slow song',
+  'I poured {P} over ice and watched the whole table go quiet',
+  '{P} in cursive, signed at the bottom with a steady hand',
+  'I dance with {P} in the kitchen like nobody is filming',
+  'the bassline said {P} and the candles just nodded along',
+  'I keep {P} pressed like a good shirt, ready for the slow ride',
+  '{P} after midnight, voice low, nowhere else to be',
+  'I threaded {P} through the melody till it purred back at me',
+  'smooth is a strategy, {P} never even saw the hook coming',
+  'I served {P} warm with the good glasses nobody is allowed to touch',
+  '{P} on vinyl, crackle in the background, hand on the small of the beat',
+];
+const GHOST_ROSTER = [
+  { name: 'GHOST-9', bars: null }, // dark bank below (the original Glitchy-clone voice)
+  { name: 'DEAD MIC', bars: BRAG_BARS },
+  { name: 'SUNNY D', bars: SUNNY_BARS },
+  { name: 'VELVET V', bars: SMOOTH_BARS },
+];
 const BOT_BARS = [
   'I turned {P} into a prayer that the basement never answered',
   '{P} on my chest and I still walked in like I owned the dark',
@@ -72,12 +125,14 @@ const BOT_BARS = [
   'somewhere under {P} there is a version of me still standing',
   'the mirror filed a report and the headline was {P}',
 ];
+GHOST_ROSTER[0].bars = BOT_BARS; // GHOST-9 keeps the original dark bank
 function botBarText(p) {
+  const bank = p.barBank && p.barBank.length ? p.barBank : BOT_BARS;
   const prompt = p.currentPrompt || 'Static';
-  const fresh = BOT_BARS.map((b, i) => i).filter(i => !(p.usedBars || []).includes(i));
-  const idx = fresh.length ? pick(fresh) : rnd(BOT_BARS.length);
+  const fresh = bank.map((b, i) => i).filter(i => !(p.usedBars || []).includes(i));
+  const idx = fresh.length ? pick(fresh) : rnd(bank.length);
   p.usedBars = [...(p.usedBars || []), idx];
-  return BOT_BARS[idx].replace('{P}', prompt.toLowerCase());
+  return bank[idx].replace('{P}', prompt.toLowerCase());
 }
 function humanPresent(room) { return room.players.some(p => !p.isBot && p.connected); }
 
@@ -496,7 +551,13 @@ io.on('connection', (socket) => {
     player = newPlayer(socket.id, String(name || 'Player').slice(0, 20), streak);
     room.players.push(player);
     const nBots = Math.max(1, Math.min(3, Number(bots) || 2));
-    for (let i = 0; i < nBots; i++) room.players.push(newPlayer(`bot_${code}_${i}`, BOT_NAMES[i], 0, true));
+    const roster = [...GHOST_ROSTER].sort(() => Math.random() - 0.5); // random lineup every match
+    for (let i = 0; i < nBots; i++) {
+      const g = roster[i % roster.length];
+      const bot = newPlayer(`bot_${code}_${i}`, g.name, 0, true);
+      bot.barBank = g.bars;
+      room.players.push(bot);
+    }
     rooms.set(code, room); socket.join(code);
     startWatchdog(room);
     startBotDriver(room);
