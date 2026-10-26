@@ -80,6 +80,7 @@
     <button id="create">Open a room</button>
     <input id="code" placeholder="CODE" maxlength="4" style="text-transform:uppercase; width:90px">
     <button id="joinBtn" class="alt">Join a room</button>
+    <button id="rejoinBtn" class="alt" style="display:none"></button>
     <p id="err" style="color:#ff4d5e"></p>
     <p id="streakLine" style="color:var(--ash); font-size:12.5px"></p>
   </div>
@@ -185,9 +186,33 @@ function paintStreak() { $('streakLine').textContent = streak.best > 0 ? `Your s
 paintStreak();
 
 $('create').onclick = () => socket.emit('create_room', { name: $('name').value, streak: streak.cur }, r => r.ok ? enter(r.code) : $('err').textContent = r.error);
-$('joinBtn').onclick = () => socket.emit('join_room', { name: $('name').value, code: $('code').value, streak: streak.cur }, r => r.ok ? enter(r.code) : $('err').textContent = r.error);
+$('joinBtn').onclick = () => {
+  const name = $('name').value, code = $('code').value;
+  socket.emit('join_room', { name, code, streak: streak.cur }, r => {
+    if (r.ok) return enter(r.code);
+    if (r.error === 'Match already started') {
+      // Dropped mid-match? Try to reclaim the seat under this name.
+      socket.emit('rejoin_room', { name, code }, r2 => r2.ok ? enter(r2.code) : $('err').textContent = r.error);
+    } else $('err').textContent = r.error;
+  });
+};
 $('start').onclick = () => socket.emit('start_match', r => { if (r && !r.ok) alert(r.error); });
-function enter(code) { $('join').style.display = 'none'; $('game').style.display = 'block'; $('roomCode').textContent = code; }
+function enter(code) {
+  $('join').style.display = 'none'; $('game').style.display = 'block'; $('roomCode').textContent = code;
+  try { localStorage.setItem('barnone_session', JSON.stringify({ code, name: $('name').value })); } catch (e) {}
+}
+// If this browser was in a match, offer the way back in.
+try {
+  const sess = JSON.parse(localStorage.getItem('barnone_session') || 'null');
+  if (sess && sess.code) {
+    const b = $('rejoinBtn');
+    b.style.display = ''; b.textContent = `Rejoin room ${sess.code}`;
+    b.onclick = () => socket.emit('rejoin_room', { name: sess.name, code: sess.code }, r => {
+      if (r.ok) { $('name').value = sess.name; enter(r.code); }
+      else { $('err').textContent = r.error; localStorage.removeItem('barnone_session'); b.style.display = 'none'; }
+    });
+  }
+} catch (e) {}
 
 $('playSound').onclick = () => socket.emit('sound_decision', { play: true });
 $('binSound').onclick = () => socket.emit('sound_decision', { play: false });
