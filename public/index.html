@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BAR NONE — an underground writing fight</title>
+<title>BAR NONE — Underground Write Club</title>
 <style>
   :root { --bone:#e6dfd0; --blood:#b3122e; --ash:#8f8a7d; --coal:#0a0a0b; --panel:#121212; }
   * { box-sizing:border-box; }
@@ -60,6 +60,10 @@
   textarea { width:97%; background:#0f0f0f; }
   .verse { font-size:13.5px; color:#cfc9b8; }
   .verse div { margin:3px 0; }
+  .vbox { border:1px solid #2c2c2c; border-left:4px solid #4a4a4a; background:#0f0f0f; padding:10px 12px; margin:8px 0; font-size:13.5px; color:#cfc9b8; }
+  .vbox.up { border-left-color:var(--blood); }
+  .vbox .vhead { font-family:Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif; letter-spacing:.1em; text-transform:uppercase; font-size:14px; color:var(--bone); margin-bottom:5px; }
+  .vbox .vbar { margin:3px 0; }
   .frozen { color:#ff4d5e; font-style:italic; }
   .stamp { display:inline-block; border:2px solid var(--blood); color:#ff4d5e; padding:1px 8px; transform:rotate(-3deg); text-transform:uppercase; letter-spacing:.15em; font-size:11px; }
 </style>
@@ -67,12 +71,12 @@
 <body>
 <div class="wrap">
 <h1>BAR <span>NONE</span></h1>
-<p class="tag">An underground writing fight · Noctis Ritus Productions</p>
+<p class="tag">Underground Write Club · Noctis Ritus Productions</p>
 
 <div id="join">
   <div class="panel">
     <h2>The Basement</h2>
-    <input id="name" placeholder="Your fight name" maxlength="20"><br>
+    <input id="name" placeholder="Your writer name" maxlength="20"><br>
     <button id="create">Open a room</button>
     <input id="code" placeholder="CODE" maxlength="4" style="text-transform:uppercase; width:90px">
     <button id="joinBtn" class="alt">Join a room</button>
@@ -82,12 +86,12 @@
   <div class="panel paper">
     <h2>House Rules</h2>
     <ol class="rules">
-      <li><b>First rule of BAR NONE:</b> the clock decides. Run out of time and the game moves without you — whatever you typed is what you wrote.</li>
+      <li><b>First rule of BAR NONE:</b> you do not talk about BAR NONE. <i>(But we really, really want you to talk about BAR NONE.)</i></li>
       <li>Race to <b>8 bars</b>. Every turn you draw a sound card and an action card.</li>
       <li>Play the sound and the shared beat bends for everybody — or bin it. Playing it draws you an extra card.</li>
-      <li>One prompt card and one dirty trick per turn. Write your bar off the prompt before the timer dies. <b>Locked is locked.</b></li>
+      <li>One prompt card and one dirty trick per turn. Write your bar off the prompt before the timer dies — and when it dies, whatever you've typed is what you wrote. <b>Locked is locked.</b></li>
       <li>Sabotage lands. A shield blocks one hit. An empty bar still counts — it just counts as a freeze, and the room remembers.</li>
-      <li>First fighter to 8 bars triggers the last round. Then the room votes on the verses. Talk is cheap. Bars decide.</li>
+      <li>First writer to 8 bars triggers the last round. Then the room votes on the verses. Talk is cheap. Bars decide.</li>
     </ol>
   </div>
 </div>
@@ -96,6 +100,7 @@
   <div class="panel">
     Room <b id="roomCode"></b> · <span id="phase"></span> · Decks A:<span id="deckA"></span> S:<span id="deckS"></span>
     <div id="players"></div>
+    <div id="modeRow" style="margin-top:6px; font-size:13px"></div>
     <button id="start" style="display:none">Start the fight</button>
   </div>
 
@@ -153,7 +158,23 @@
 const socket = io();
 let myId = null, S = null, myHand = [], myDrawn = null;
 let pendingPlay = null, discardSel = new Set(), myVote = null, appliedMatch = 0;
-socket.on('connect', () => myId = socket.id);
+socket.on('connect', () => { myId = socket.id; sampleClock(); });
+
+// Clock sync: estimate how far this device's clock sits from the server's,
+// keeping the lowest-latency sample. Beat stamps are server times; without
+// this, a phone and a PC run the "same" beat at different moments.
+let clockOffset = 0, bestRtt = Infinity;
+function serverNow() { return Date.now() + clockOffset; }
+function sampleClock() {
+  const t0 = Date.now();
+  socket.emit('time_ping', {}, (r) => {
+    if (!r || !r.t) return;
+    const t1 = Date.now(), rtt = t1 - t0;
+    if (rtt < bestRtt) { bestRtt = rtt; clockOffset = r.t - (t0 + t1) / 2; }
+  });
+}
+setInterval(sampleClock, 20000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) sampleClock(); });
 const $ = id => document.getElementById(id);
 
 // Win streaks live in this browser (no accounts in v1).
@@ -181,7 +202,7 @@ socket.on('state', s => { S = s; render(); });
 
 setInterval(() => {
   if (!S || !S.turn) return;
-  const left = Math.max(0, Math.ceil((S.turn.deadline - Date.now()) / 1000));
+  const left = Math.max(0, Math.ceil((S.turn.deadline - serverNow()) / 1000));
   const el = $('cd'); if (el) el.textContent = left + 's';
 }, 250);
 
@@ -227,6 +248,15 @@ function render() {
   const canStart = (S.phase === 'lobby' || S.phase === 'finished') && S.hostId === myId && S.players.length >= 2;
   $('start').style.display = canStart ? '' : 'none';
   $('start').textContent = S.phase === 'finished' ? 'Run it back' : 'Start the fight';
+
+  // Pace: host picks in the lobby; everybody sees the current pace.
+  const paceTxt = S.mode === 'competition' ? 'COMPETITION — 12s to decide · 40s to write' : 'Basement pace — 45s to decide · 60s to write';
+  if (S.phase === 'lobby' && S.hostId === myId) {
+    $('modeRow').innerHTML = `Pace: <button class="alt" data-m="basement" ${S.mode !== 'competition' ? 'disabled' : ''}>Basement</button> <button class="alt" data-m="competition" ${S.mode === 'competition' ? 'disabled' : ''}>Competition</button> <span style="color:var(--ash)">${paceTxt}</span>`;
+    $('modeRow').querySelectorAll('button').forEach(b => b.onclick = () => socket.emit('set_mode', { mode: b.dataset.m }, r => { if (r && !r.ok) alert(r.error); }));
+  } else {
+    $('modeRow').textContent = 'Pace: ' + paceTxt;
+  }
 
   // ---- voting & results ----
   if (S.phase === 'voting' && S.matchId !== appliedMatch) myVote = null;
@@ -286,17 +316,28 @@ function render() {
     d.appendChild(b);
     $('hand').appendChild(d);
   }
-  $('verses').innerHTML = S.players.map(p => `<div class="verse"><b>${p.name}</b>${p.verse.map(v => `<div>${v.frozen ? '<span class="frozen">[froze]</span>' : v.text} <i style="color:#777">(${v.prompt}${v.reqs && v.reqs.length ? ' · ' + v.reqs.join('; ') : ''})</i></div>`).join('')}</div>`).join('');
+  $('verses').innerHTML = S.players.map(p => {
+    const up = S.turn && S.turn.playerId === p.id;
+    const head = `${p.id === myId ? 'Your verse — ' : ''}${p.name} · ${p.verse.length}/8 bars`;
+    const bars = p.verse.length
+      ? p.verse.map(v => `<div class="vbar">${v.frozen ? '<span class="frozen">[froze]</span>' : v.text} <i style="color:#777">(${v.prompt}${v.reqs && v.reqs.length ? ' · ' + v.reqs.join('; ') : ''})</i></div>`).join('')
+      : '<div class="vbar" style="color:#777">No bars yet.</div>';
+    return `<div class="vbox${up ? ' up' : ''}"><div class="vhead">${head}</div>${bars}</div>`;
+  }).join('');
   $('log').innerHTML = S.log.map(l => `<div>${l}</div>`).join('');
   syncAudio();
 }
 
 // ================= AUDIO (Tone.js) =================
-// Clients share the server's beat epoch, so step 0 lands at the same wall-clock
-// moment everywhere (up to clock skew). Pattern/fx changes promote on bar lines.
-let audioOn = false, beatStarted = false, curStep = 0;
-let liveSounds = {}, pendingSounds = {}, liveFx = undefined, pendingFx = undefined;
+// The beat runs on server-stamped downbeats (see restamp() in server.js).
+// Every turn start and every board change ships a new stamp; a client that
+// sees one cuts the loop and restarts it from step 0 at the stamp's server
+// time. Clock offset correction makes that instant the same on every device,
+// and a player who enables sound mid-match joins the loop in phase.
+let audioOn = false;
+let liveSounds = {}, liveFx = null, curTempo = 92;
 let inst = {};
+let sched = null, schedTimer = null; // { id, stepIdx, nextAt } — nextAt is a server time (ms)
 
 function buildInstruments() {
   const master = new Tone.Gain(0.8).toDestination();
@@ -312,7 +353,7 @@ function buildInstruments() {
 }
 
 function fireHit(h, time) {
-  const stepSec = 60 / Tone.Transport.bpm.value / 4;
+  const stepSec = 60 / curTempo / 4;
   const dur = Math.max(0.05, (h.l || 1) * stepSec * 0.95);
   try {
     switch (h.cat) {
@@ -328,33 +369,39 @@ function fireHit(h, time) {
   } catch (e) { /* audio must never break the game */ }
 }
 
-function startBeat() {
-  beatStarted = true;
-  const tr = Tone.Transport;
-  tr.bpm.value = 92;
-  tr.scheduleRepeat((time) => {
-    if (curStep % 16 === 0) { // bar boundary: promote queued changes
-      liveSounds = pendingSounds;
-      if (pendingFx !== undefined) { liveFx = pendingFx; tr.bpm.rampTo(window.BarNoneAudio.tempoFor(liveFx), 0.1); }
+function ensureScheduler() { if (!schedTimer) schedTimer = setInterval(schedulerTick, 40); }
+
+function schedulerTick() {
+  if (!audioOn || !S || S.phase !== 'playing' || !S.beat) return;
+  const stamp = S.beat;
+  const fx = S.boardFx || null;
+  curTempo = window.BarNoneAudio.tempoFor(fx);
+  const stepMs = 60000 / curTempo / 4;
+  if (!sched || sched.id !== stamp.id) {
+    liveSounds = S.activeSounds || {}; liveFx = fx;
+    const nowS = serverNow();
+    let idx = 0, nextAt = stamp.startAt;
+    if (nowS > stamp.startAt) { idx = Math.floor((nowS - stamp.startAt) / stepMs); nextAt = stamp.startAt + (idx + 1) * stepMs; }
+    sched = { id: stamp.id, stepIdx: idx, nextAt };
+  }
+  while (sched.nextAt < serverNow() + 130) {
+    const step = sched.stepIdx % 64;
+    const t = Tone.now() + (sched.nextAt - serverNow()) / 1000;
+    for (const h of window.BarNoneAudio.hitsAtStep(liveSounds, liveFx, step)) fireHit(h, t);
+    if (liveFx && liveFx.name === 'GLITCH' && Math.random() < 0.10) fireHit({ cat: 'GLITCH', n: null, l: 1, v: 0.5 }, t);
+    sched.stepIdx++;
+    sched.nextAt += stepMs;
+    if (sched.nextAt < serverNow() - 500) { // tab slept or long stall: rejoin the grid in phase
+      const idx = Math.floor((serverNow() - stamp.startAt) / stepMs);
+      sched.stepIdx = idx; sched.nextAt = stamp.startAt + (idx + 1) * stepMs;
     }
-    let fx = liveFx;
-    const hits = window.BarNoneAudio.hitsAtStep(liveSounds, fx, curStep % 64);
-    for (const h of hits) fireHit(h, time);
-    if (fx && fx.name === 'GLITCH' && Math.random() < 0.10) { // scatter extra static
-      fireHit({ cat: 'GLITCH', n: null, l: 1, v: 0.5 }, time);
-    }
-    curStep++;
-  }, '16n');
-  const startAt = S && S.beat ? S.beat.startAt : Date.now();
-  tr.start('+' + Math.max(0.05, (startAt - Date.now()) / 1000));
+  }
 }
 
 function syncAudio() {
   if (!S) return;
-  pendingSounds = S.activeSounds || {};
-  pendingFx = S.boardFx || null;
-  if (audioOn && !beatStarted && S.phase === 'playing') startBeat();
-  if (beatStarted && S.phase !== 'playing') { Tone.Transport.stop(); beatStarted = false; curStep = 0; }
+  if (S.phase !== 'playing') { sched = null; return; }
+  if (audioOn) ensureScheduler();
 }
 
 $('soundBtn').onclick = async () => {
