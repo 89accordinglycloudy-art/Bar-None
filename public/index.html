@@ -161,7 +161,7 @@
 <script>
 const socket = io();
 let myId = null, S = null, myHand = [], myDrawn = null;
-let pendingPlay = null, discardSel = new Set(), myVote = null, appliedMatch = 0;
+let pendingPlay = null, discardSel = new Set(), myVote = null, appliedMatch = 0, lastWriteKey = null;
 socket.on('connect', () => { myId = socket.id; sampleClock(); });
 
 // Clock sync: estimate how far this device's clock sits from the server's,
@@ -221,7 +221,7 @@ try {
 $('playSound').onclick = () => socket.emit('sound_decision', { play: true });
 $('binSound').onclick = () => socket.emit('sound_decision', { play: false });
 $('endTurn').onclick = () => socket.emit('end_turn');
-$('submitBar').onclick = () => socket.emit('submit_bar', { text: $('barText').value });
+$('submitBar').onclick = () => { socket.emit('submit_bar', { text: $('barText').value }); $('barText').value = ''; lastWriteKey = null; };
 let draftT = null;
 $('barText').addEventListener('input', () => { clearTimeout(draftT); draftT = setTimeout(() => socket.emit('draft', { text: $('barText').value }), 400); });
 $('confirmDiscard').onclick = () => socket.emit('discard_cards', { ids: [...discardSel] });
@@ -328,7 +328,13 @@ function render() {
   $('soundDecision').style.display = stage === 'sound' && myDrawn ? '' : 'none';
   if (myDrawn) { const l = cardLabel(myDrawn); $('drawnName').textContent = l.n; $('drawnInfo').textContent = l.t; $('drawnText').textContent = l.x; }
   $('writeBox').style.display = stage === 'writing' ? '' : 'none';
-  if (stage === 'writing') $('promptText').textContent = S.turn.prompt || '';
+  if (stage === 'writing') {
+    $('promptText').textContent = S.turn.prompt || '';
+    // Fresh box for every bar: without this the last bar's text stays in the
+    // box and the next submission repeats the whole verse so far.
+    const wk = S.matchId + ':' + S.turn.deadline;
+    if (lastWriteKey !== wk) { lastWriteKey = wk; $('barText').value = ''; }
+  }
   $('discardBox').style.display = stage === 'discard' ? '' : 'none';
   $('endTurn').style.display = (stage === 'action' || stage === 'writing') ? '' : 'none';
 
