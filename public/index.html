@@ -124,7 +124,7 @@
     </div>
     <div id="writeBox" style="display:none">
       Prompt: <b id="promptText"></b><br>
-      <textarea id="barText" rows="2" maxlength="300" placeholder="Write your bar..."></textarea><br>
+      <textarea id="barText" rows="5" maxlength="600" placeholder="Write your bar..."></textarea><br>
       <button id="submitBar">Lock the bar</button>
     </div>
     <div id="discardBox" style="display:none">
@@ -364,32 +364,42 @@ let liveSounds = {}, liveFx = null, curTempo = 92;
 let inst = {};
 let sched = null, schedTimer = null; // { id, stepIdx, nextAt } — nextAt is a server time (ms)
 
+// Real one-shot samples (rendered for the game — see tools/make-samples.js),
+// played through Samplers so pitched parts (808 / piano / strings) still
+// follow the pattern data. No more synth bleeps.
 function buildInstruments() {
-  const master = new Tone.Gain(0.8).toDestination();
-  const dark = new Tone.Filter(5200, 'lowpass').connect(master);
-  inst.KICK = new Tone.MembraneSynth({ octaves: 7, envelope: { attack: 0.001, decay: 0.38, sustain: 0.01, release: 0.4 } }).connect(dark);
-  inst.SNARE = new Tone.NoiseSynth({ noise: { type: 'pink' }, envelope: { attack: 0.001, decay: 0.17, sustain: 0 } }).connect(dark);
-  inst.HATS = new Tone.MetalSynth({ envelope: { attack: 0.001, decay: 0.06, release: 0.02 }, harmonicity: 5.1, modulationIndex: 24, resonance: 5200, octaves: 1.2 }).connect(new Tone.Gain(0.35).connect(dark));
-  inst.BASS808 = new Tone.MonoSynth({ oscillator: { type: 'sine' }, filter: { Q: 1, type: 'lowpass', rolloff: -24 }, envelope: { attack: 0.004, decay: 0.4, sustain: 0.4, release: 0.6 }, filterEnvelope: { attack: 0.001, decay: 0.2, sustain: 0.3, baseFrequency: 120, octaves: 2 } }).connect(dark);
-  inst.PIANO = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'triangle' }, envelope: { attack: 0.004, decay: 0.5, sustain: 0.12, release: 1.1 } }).connect(new Tone.Gain(0.5).connect(dark));
-  inst.STRINGS = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'sawtooth' }, envelope: { attack: 0.35, decay: 0.4, sustain: 0.55, release: 1.4 } }).connect(new Tone.Gain(0.28).connect(dark));
-  inst.GLITCH = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.03 } }).connect(new Tone.Gain(0.3).connect(dark));
-  inst.INDUSTRIAL = new Tone.MetalSynth({ envelope: { attack: 0.001, decay: 0.22, release: 0.08 }, harmonicity: 3.4, modulationIndex: 18, resonance: 900, octaves: 0.8 }).connect(new Tone.Gain(0.5).connect(dark));
+  const master = new Tone.Gain(0.9).toDestination();
+  const mk = (urls, gain) => {
+    const s = new Tone.Sampler({ urls, baseUrl: '/samples/' });
+    if (gain && gain !== 1) s.connect(new Tone.Gain(gain).connect(master)); else s.connect(master);
+    return s;
+  };
+  inst.KICK = mk({ C1: 'kick.wav' });
+  inst.SNARE = mk({ C2: 'snare.wav' });
+  inst.HATS = mk({ C3: 'hat.wav', D3: 'hat-open.wav' }, 0.85);
+  inst.BASS808 = mk({ A1: 'bass808.wav' });
+  inst.PIANO = mk({ A3: 'piano.wav' }, 0.95);
+  inst.STRINGS = mk({ A4: 'strings.wav' }, 0.85);
+  inst.GLITCH = mk({ C4: 'glitch.wav' }, 0.9);
+  inst.INDUSTRIAL = mk({ C3: 'industrial.wav' });
 }
 
+const BASE_NOTE = { KICK: 'C1', SNARE: 'C2', BASS808: 'A1', PIANO: 'A3', STRINGS: 'A4', GLITCH: 'C4', INDUSTRIAL: 'C3' };
 function fireHit(h, time) {
-  const stepSec = 60 / curTempo / 4;
-  const dur = Math.max(0.05, (h.l || 1) * stepSec * 0.95);
+  const v = inst[h.cat];
+  if (!v || !v.loaded) return;
   try {
-    switch (h.cat) {
-      case 'KICK': inst.KICK.triggerAttackRelease('C1', '8n', time, h.v); break;
-      case 'SNARE': inst.SNARE.triggerAttackRelease('16n', time, h.v); break;
-      case 'HATS': inst.HATS.triggerAttackRelease('G6', '32n', time, h.v * 0.7); break;
-      case 'BASS808': inst.BASS808.triggerAttackRelease(Tone.Frequency(h.n || 33, 'midi').toNote(), dur, time, h.v); break;
-      case 'PIANO': inst.PIANO.triggerAttackRelease(Tone.Frequency(h.n || 57, 'midi').toNote(), dur, time, h.v * 0.8); break;
-      case 'STRINGS': inst.STRINGS.triggerAttackRelease(Tone.Frequency(h.n || 69, 'midi').toNote(), dur, time, h.v * 0.8); break;
-      case 'GLITCH': inst.GLITCH.triggerAttackRelease(Tone.Frequency(72 + Math.floor(Math.random() * 12), 'midi').toNote(), '64n', time, h.v * 0.7); break;
-      case 'INDUSTRIAL': inst.INDUSTRIAL.triggerAttackRelease('C3', '16n', time, h.v); break;
+    if (h.cat === 'HATS') { // longer written hits ring the open hat
+      v.triggerAttackRelease((h.l || 1) >= 2 ? 'D3' : 'C3', 0.1, time, h.v * 0.8);
+    } else if (h.cat === 'BASS808' || h.cat === 'PIANO' || h.cat === 'STRINGS') {
+      const stepSec = 60 / curTempo / 4;
+      const dur = Math.max(0.08, (h.l || 1) * stepSec * 0.95);
+      v.triggerAttackRelease(Tone.Frequency(h.n || 60, 'midi').toNote(), dur, time, h.v);
+    } else if (h.cat === 'GLITCH') { // same tear, random tape speed
+      const notes = ['A3', 'C4', 'D4', 'F4', 'G4', 'C5'];
+      v.triggerAttackRelease(notes[Math.floor(Math.random() * notes.length)], 0.15, time, h.v * 0.8);
+    } else {
+      v.triggerAttackRelease(BASE_NOTE[h.cat], 0.25, time, h.v);
     }
   } catch (e) { /* audio must never break the game */ }
 }
@@ -431,7 +441,13 @@ function syncAudio() {
 
 $('soundBtn').onclick = async () => {
   await Tone.start();
-  if (!Object.keys(inst).length) buildInstruments();
+  if (!Object.keys(inst).length) {
+    buildInstruments();
+    $('soundBtn').textContent = 'Sound: LOADING';
+    $('soundBtn').disabled = true;
+    await Promise.race([Tone.loaded(), new Promise(r => setTimeout(r, 9000))]);
+    $('soundBtn').disabled = false;
+  }
   audioOn = !audioOn;
   Tone.Destination.mute = !audioOn;
   $('soundBtn').textContent = audioOn ? 'Sound: ON' : 'Sound: OFF';
