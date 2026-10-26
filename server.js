@@ -69,6 +69,30 @@ function sendHands(room) {
 }
 function broadcast(room) { io.to(room.code).emit('state', publicState(room)); sendHands(room); }
 function sync(room) { broadcast(room); }
+
+// Turn watchdog: every stage sets a deadline via setTimer. If a deadline ever
+// passes unfired (a dropped timer, a wedged callback), the watchdog forces
+// that stage's timeout path — a match can never freeze on a dead turn.
+function startWatchdog(room) {
+  room.watchdog = setInterval(() => {
+    if (!rooms.has(room.code)) { clearInterval(room.watchdog); return; }
+    if (room.phase !== 'playing' || !room.turn) return;
+    if (!room.players.some(p => p.connected)) return; // empty room: frozen in grace, don't play it out
+    if (Date.now() < room.deadline + 2000) return;
+    if (process.env.BN_DEBUG_WATCHDOG) console.log('WATCHDOG FIRE:', room.turn.stage, 'overdue by', Date.now() - room.deadline, 'ms');
+    const p = cur(room);
+    try {
+      if (room.turn.stage === 'sound') resolveSound(room, Math.random() < 0.5);
+      else if (room.turn.stage === 'action') endActionPhase(room);
+      else if (room.turn.stage === 'writing') submitBar(room, p, p.draft || '', true);
+      else if (room.turn.stage === 'discard') {
+        while (p.hand.length > HAND_LIMIT) room.actionDiscard.push(p.hand.splice(rnd(p.hand.length), 1)[0]);
+        log(room, `${p.name}'s discards were forced — the floor doesn't wait.`);
+        advance(room);
+      }
+    } catch (e) { console.error('watchdog', e); }
+  }, 2000);
+}
 // Beat stamps: every turn start and every board change re-stamps the beat.
 // Clients cut the loop and restart it from step 0 at startAt (server time),
 // so all devices hear the same updated board from the same downbeat.
@@ -318,7 +342,28 @@ io.on('connection', (socket) => {
     room = { code, phase: 'lobby', hostId: socket.id, players: [], turnIndex: 0, direction: 1, turn: null, log: [], timer: null, deadline: 0, activeSounds: {}, boardFx: null, actionDeck: [], actionDiscard: [], soundDeck: [], soundDiscard: [], winner: null, finalTurnsLeft: null, votes: {}, results: null, finishSeq: [], matchId: 0, mode: 'basement', beat: null };
     player = newPlayer(socket.id, String(name || 'Player').slice(0, 20), streak);
     room.players.push(player); rooms.set(code, room); socket.join(code);
+    startWatchdog(room);
     cb && cb({ ok: true, code }); sync(room);
+  });
+
+  // Reclaim a seat after a drop (phone slept, browser refreshed, signal lost).
+  // The seat — hand, verse, turn, shield — survives; only the socket id changes.
+  socket.on('rejoin_room', ({ name, code }, cb) => {
+    room = rooms.get(String(code || '').toUpperCase());
+    if (!room) return cb && cb({ ok: false, error: 'Room not found' });
+    const seat = room.players.find(p => p.name === String(name || '').slice(0, 20) && !p.connected);
+    if (!seat) return cb && cb({ ok: false, error: 'No seat to reclaim under that name' });
+    const oldId = seat.id;
+    seat.id = socket.id; seat.connected = true;
+    if (room.hostId === oldId) room.hostId = socket.id;
+    if (room.turn && room.turn.playerId === oldId) room.turn.playerId = socket.id;
+    if (room.winner === oldId) room.winner = socket.id;
+    if (room.votes && room.votes[oldId]) { room.votes[socket.id] = room.votes[oldId]; delete room.votes[oldId]; }
+    room.finishSeq = (room.finishSeq || []).map(id => id === oldId ? socket.id : id);
+    if (room.deathTimer) { clearTimeout(room.deathTimer); room.deathTimer = null; }
+    player = seat; socket.join(room.code);
+    log(room, `${seat.name} climbs back through the basement door.`);
+    cb && cb({ ok: true, code: room.code }); sync(room);
   });
 
   socket.on('join_room', ({ name, code, streak }, cb) => {
@@ -415,7 +460,14 @@ io.on('connection', (socket) => {
       room.players = room.players.filter(p => p.id !== player.id);
       if (room.hostId === player.id && room.players.length) room.hostId = room.players[0].id;
     }
-    if (room.players.every(p => !p.connected)) { clearTimeout(room.timer); rooms.delete(room.code); }
+    if (room.players.every(p => !p.connected)) {
+      clearTimeout(room.timer);
+      if (room.phase === 'playing' || room.phase === 'voting') {
+        // Grace window: keep the room (and every seat) alive for 3 minutes so
+        // a dropped player can rejoin instead of losing the match.
+        if (!room.deathTimer) room.deathTimer = setTimeout(() => rooms.delete(room.code), 180000);
+      } else rooms.delete(room.code);
+    }
     else sync(room);
   });
 });
