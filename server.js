@@ -15,11 +15,16 @@ const MAX_PLAYERS = 4;
 const HAND_LIMIT = 4;
 const VERSE_TARGET = Number(process.env.BN_VERSE_TARGET || 8);
 const T = {
-  decide: Number(process.env.BN_DECIDE_MS || 15000),
-  write: Number(process.env.BN_WRITE_MS || 45000),
   discard: Number(process.env.BN_DISCARD_MS || 10000),
   vote: Number(process.env.BN_VOTE_MS || 60000),
 };
+// Pace modes (playtest call, Oct 26): basement = room to read your cards;
+// competition = pressure. Host picks in the lobby.
+const MODES = {
+  basement:    { decide: Number(process.env.BN_DECIDE_MS || 45000), write: Number(process.env.BN_WRITE_MS || 60000) },
+  competition: { decide: 12000, write: 40000 },
+};
+const modeTimers = (room) => MODES[room.mode] || MODES.basement;
 const rooms = new Map();
 app.get('/health', (req, res) => res.json({ ok: true, rooms: rooms.size }));
 
@@ -46,7 +51,7 @@ function log(room, msg) { room.log.push(msg); if (room.log.length > 30) room.log
 
 function publicState(room) {
   return {
-    code: room.code, phase: room.phase, hostId: room.hostId, direction: room.direction,
+    code: room.code, phase: room.phase, hostId: room.hostId, direction: room.direction, mode: room.mode || 'basement',
     players: room.players.map(p => ({ id: p.id, name: p.name, streak: p.streak, bars: p.verse.length, handCount: p.hand.length, shield: p.shield, connected: p.connected, verse: p.verse })),
     matchId: room.matchId || 0,
     voting: room.phase === 'voting' ? { votedIds: Object.keys(room.votes || {}), deadline: room.deadline } : null,
@@ -64,6 +69,12 @@ function sendHands(room) {
 }
 function broadcast(room) { io.to(room.code).emit('state', publicState(room)); sendHands(room); }
 function sync(room) { broadcast(room); }
+// Beat stamps: every turn start and every board change re-stamps the beat.
+// Clients cut the loop and restart it from step 0 at startAt (server time),
+// so all devices hear the same updated board from the same downbeat.
+function restamp(room, delay = 1200) {
+  room.beat = { bpm: 92, startAt: Date.now() + delay, id: ((room.beat && room.beat.id) || 0) + 1 };
+}
 
 // ---------- turn engine ----------
 function setTimer(room, ms, fn) {
@@ -93,7 +104,7 @@ function startMatch(room) {
   const topStreak = Math.max(...room.players.map(p => p.streak));
   const candidates = room.players.map((p, i) => [p, i]).filter(([p]) => p.streak === topStreak);
   room.turnIndex = pick(candidates)[1];
-  room.beat = { bpm: 92, startAt: Date.now() + 1500 }; // clients align their step clocks to this epoch
+  restamp(room, 1500);
   room.phase = 'playing';
   log(room, `Match started. ${cur(room).name} opens${topStreak > 0 ? ` (streak ${topStreak})` : ''}.`);
   startTurn(room);
@@ -108,7 +119,8 @@ function startTurn(room) {
   if (bonus) p.hand.push(bonus);
   log(room, `${p.name}'s turn.`);
   tickBoardFx(room);
-  setTimer(room, T.decide, () => { // timeout: random legal resolution
+  restamp(room); // the beat cuts here and restarts with the current board
+  setTimer(room, modeTimers(room).decide, () => { // timeout: random legal resolution
     if (room.turn && room.turn.stage === 'sound') resolveSound(room, Math.random() < 0.5);
   });
   sync(room);
@@ -132,12 +144,13 @@ function resolveSound(room, playIt) {
     }
     const bonus = drawFrom(room.actionDeck, room.actionDiscard);
     if (bonus) p.hand.push(bonus);
+    restamp(room, 900); // board changed — drop the beat and restart it updated
   } else if (card) {
     room.soundDiscard.push(card);
     log(room, `${p.name} bins the sound card.`);
   }
   room.turn.stage = 'action';
-  setTimer(room, T.decide, () => { if (room.turn && room.turn.stage === 'action') endActionPhase(room); });
+  setTimer(room, modeTimers(room).decide, () => { if (room.turn && room.turn.stage === 'action') endActionPhase(room); });
   sync(room);
 }
 
@@ -171,7 +184,7 @@ function endActionPhase(room) {
 function beginWriting(room) {
   const p = cur(room);
   room.turn.stage = 'writing';
-  const ms = T.write + (p.turnExtraTime || 0) * 1000;
+  const ms = modeTimers(room).write + (p.turnExtraTime || 0) * 1000;
   p.turnExtraTime = 0;
   setTimer(room, ms, () => { if (room.turn && room.turn.stage === 'writing') submitBar(room, p, p.draft || '', true); });
   sync(room);
@@ -285,10 +298,10 @@ function applyTactical(room, actor, card, targetId, discardId) {
       const cats = Object.keys(room.activeSounds); if (!cats.length) break;
       const cat = pick(cats); let drawn = null, guard = 0;
       while (guard++ < 60) { const c = drawFrom(room.soundDeck, room.soundDiscard); if (!c) break; if (c.type === 'sound') { drawn = c; break; } room.soundDiscard.push(c); }
-      if (drawn) { room.activeSounds[cat] = drawn; log(room, `The ${cat} gets hijacked: ${drawn.name}.`); }
+      if (drawn) { room.activeSounds[cat] = drawn; log(room, `The ${cat} gets hijacked: ${drawn.name}.`); restamp(room, 900); }
       break;
     }
-    case 'wildSound': applyManipulation(room, actor, { name: 'WILDCARD AUDIO', fx: 'wildSound' }); break;
+    case 'wildSound': applyManipulation(room, actor, { name: 'WILDCARD AUDIO', fx: 'wildSound' }); restamp(room, 900); break;
     case 'flowSelf': actor.pendingReqs.push(`${card.name}: ${card.req}`); log(room, `${actor.name} takes on ${card.name} for the next bar.`); break;
   }
   return null;
@@ -302,7 +315,7 @@ io.on('connection', (socket) => {
 
   socket.on('create_room', ({ name, streak }, cb) => {
     const code = makeCode();
-    room = { code, phase: 'lobby', hostId: socket.id, players: [], turnIndex: 0, direction: 1, turn: null, log: [], timer: null, deadline: 0, activeSounds: {}, boardFx: null, actionDeck: [], actionDiscard: [], soundDeck: [], soundDiscard: [], winner: null, finalTurnsLeft: null, votes: {}, results: null, finishSeq: [], matchId: 0 };
+    room = { code, phase: 'lobby', hostId: socket.id, players: [], turnIndex: 0, direction: 1, turn: null, log: [], timer: null, deadline: 0, activeSounds: {}, boardFx: null, actionDeck: [], actionDiscard: [], soundDeck: [], soundDiscard: [], winner: null, finalTurnsLeft: null, votes: {}, results: null, finishSeq: [], matchId: 0, mode: 'basement', beat: null };
     player = newPlayer(socket.id, String(name || 'Player').slice(0, 20), streak);
     room.players.push(player); rooms.set(code, room); socket.join(code);
     cb && cb({ ok: true, code }); sync(room);
@@ -337,6 +350,16 @@ io.on('connection', (socket) => {
   });
 
   socket.on('streak_update', ({ streak }) => { if (player) { player.streak = Number(streak) || 0; if (room) sync(room); } });
+
+  socket.on('set_mode', ({ mode }, cb) => {
+    if (!room || room.hostId !== socket.id || room.phase !== 'lobby') return cb && cb({ ok: false, error: 'Host picks the pace in the lobby' });
+    if (!MODES[mode]) return cb && cb({ ok: false, error: 'Unknown pace' });
+    room.mode = mode; sync(room); cb && cb({ ok: true });
+  });
+
+  // Clock sync: clients estimate the offset between their clock and the
+  // server's so beat stamps land at the same instant on every device.
+  socket.on('time_ping', (data, cb) => { if (typeof cb === 'function') cb({ t: Date.now() }); });
 
   socket.on('sound_decision', ({ play }) => { if (myTurn() && room.turn.stage === 'sound') { clearTimeout(room.timer); resolveSound(room, !!play); } });
 
