@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BAR NONE — an underground writing fight</title>
+<style>
+  :root { --bone:#e6dfd0; --blood:#b3122e; --ash:#8f8a7d; --coal:#0a0a0b; --panel:#121212; }
+  * { box-sizing:border-box; }
+  body { font-family: ui-monospace, 'Courier New', monospace; background:var(--coal); color:var(--bone); margin:0; padding:18px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0.05 0 0 0 0 0.05 0 0 0 0 0.05 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  h1 { font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif; font-size:52px; letter-spacing:.14em; margin:2px 0 0; color:var(--bone); text-transform:uppercase; }
+  h1 span { color:var(--blood); }
+  .tag { color:var(--ash); letter-spacing:.3em; text-transform:uppercase; font-size:11px; margin:2px 0 14px; }
+  h2 { font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif; letter-spacing:.12em; text-transform:uppercase; font-size:19px; margin:0 0 8px; color:var(--bone); }
+  input, button, textarea { font-family:inherit; font-size:15px; padding:9px; margin:3px; background:#191919; color:var(--bone); border:1px solid #3a3a3a; border-radius:2px; }
+  button { cursor:pointer; background:var(--blood); border-color:#5e0a1a; color:#fff; text-transform:uppercase; letter-spacing:.08em; font-weight:bold; }
+  button:disabled { opacity:.35; cursor:default; }
+  button.alt { background:#222; border-color:#444; color:var(--bone); }
+  .wrap { max-width:880px; margin:0 auto; }
+  .panel { background:var(--panel); border:1px solid #2c2c2c; border-left:4px solid var(--blood); padding:14px; margin:12px 0; }
+  .panel.paper { background:var(--bone); color:#111; border:none; transform:rotate(-.4deg);
+    clip-path:polygon(0 1%, 4% 0, 97% 0, 100% 3%, 99.5% 96%, 96% 100%, 3% 99.5%, 0 97%); }
+  .panel.paper h2 { color:#111; }
+  .rules { font-size:13.5px; line-height:1.55; margin:0; padding-left:20px; }
+  .rules b { color:var(--blood); }
+  .hand { display:flex; flex-wrap:wrap; gap:10px; }
+  /* Action deck = sticky notes: scrawled, taped to the wall, slightly crooked */
+  .card { position:relative; width:176px; min-height:150px; color:#191914; padding:22px 10px 9px; border-radius:1px;
+    transform:rotate(-1deg); box-shadow:3px 5px 10px rgba(0,0,0,.55); }
+  .card:nth-child(3n) { transform:rotate(.8deg); }
+  .card:nth-child(4n) { transform:rotate(-.4deg); }
+  .card::before { content:''; position:absolute; top:-9px; left:50%; margin-left:-34px; width:68px; height:18px;
+    background:rgba(216,205,170,.5); border-left:1px dashed rgba(0,0,0,.15); border-right:1px dashed rgba(0,0,0,.15); transform:rotate(-2deg); }
+  .card.k-bar { background:linear-gradient(180deg,#ddd06a,#cfc05e); }
+  .card.k-flow { background:linear-gradient(180deg,#d9a7a0,#cd9a92); }
+  .card.k-help { background:linear-gradient(180deg,#b9c4a5,#aab696); }
+  .card.k-sabotage { background:linear-gradient(180deg,#c2b49a,#b3a489); }
+  .card.k-defense { background:linear-gradient(180deg,#a9bcc4,#99abb3); }
+  .card.k-wild { background:linear-gradient(180deg,#cbb2cc,#bda0bf); }
+  .card.sel { outline:3px solid var(--blood); }
+  .card .t { font-size:10px; text-transform:uppercase; letter-spacing:.12em; color:#6d0d1d; font-weight:bold; }
+  .card .n { font-weight:bold; margin:3px 0; font-size:16px; }
+  .card.k-bar .n { font-family:'Segoe Print','Bradley Hand',cursive; font-size:19px; line-height:1.15; }
+  .card .x { font-size:12px; color:#2c2c22; line-height:1.4; }
+  .card button { width:100%; margin:6px 0 0; }
+  /* Sound deck = index cards: ruled, typed, catalogued like a crate label */
+  .indexcard { position:relative; color:#161616; padding:12px 14px; max-width:430px; border-radius:2px;
+    background:repeating-linear-gradient(180deg,#e9e4d4 0 21px,#b9c4c9 21px 22px); box-shadow:3px 5px 12px rgba(0,0,0,.6); transform:rotate(.5deg); }
+  .indexcard::before { content:''; position:absolute; top:0; left:0; right:0; height:10px; background:#a33327; opacity:.75; }
+  .indexcard .t { font-size:10px; text-transform:uppercase; letter-spacing:.14em; color:#7a1020; font-weight:bold; margin-top:4px; }
+  .indexcard .n { font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif; font-size:24px; letter-spacing:.05em; margin:2px 0; }
+  .indexcard .x { font-size:12.5px; color:#333; }
+  .turn { color:#ff4d5e; font-weight:bold; text-transform:uppercase; letter-spacing:.06em; }
+  .beat { display:flex; flex-wrap:wrap; gap:6px; }
+  .slot { border:1px dashed #4a4a4a; padding:6px 10px; font-size:12.5px; color:var(--ash); }
+  .slot.on { border:none; color:#161616; transform:rotate(-.6deg); box-shadow:2px 3px 7px rgba(0,0,0,.55);
+    background:repeating-linear-gradient(180deg,#e9e4d4 0 15px,#b9c4c9 15px 16px); }
+  #log { font-size:12px; color:var(--ash); max-height:110px; overflow:auto; line-height:1.6; }
+  textarea { width:97%; background:#0f0f0f; }
+  .verse { font-size:13.5px; color:#cfc9b8; }
+  .verse div { margin:3px 0; }
+  .frozen { color:#ff4d5e; font-style:italic; }
+  .stamp { display:inline-block; border:2px solid var(--blood); color:#ff4d5e; padding:1px 8px; transform:rotate(-3deg); text-transform:uppercase; letter-spacing:.15em; font-size:11px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>BAR <span>NONE</span></h1>
+<p class="tag">An underground writing fight · Noctis Ritus Productions</p>
+
+<div id="join">
+  <div class="panel">
+    <h2>The Basement</h2>
+    <input id="name" placeholder="Your fight name" maxlength="20"><br>
+    <button id="create">Open a room</button>
+    <input id="code" placeholder="CODE" maxlength="4" style="text-transform:uppercase; width:90px">
+    <button id="joinBtn" class="alt">Join a room</button>
+    <p id="err" style="color:#ff4d5e"></p>
+    <p id="streakLine" style="color:var(--ash); font-size:12.5px"></p>
+  </div>
+  <div class="panel paper">
+    <h2>House Rules</h2>
+    <ol class="rules">
+      <li><b>First rule of BAR NONE:</b> the clock decides. Run out of time and the game moves without you — whatever you typed is what you wrote.</li>
+      <li>Race to <b>8 bars</b>. Every turn you draw a sound card and an action card.</li>
+      <li>Play the sound and the shared beat bends for everybody — or bin it. Playing it draws you an extra card.</li>
+      <li>One prompt card and one dirty trick per turn. Write your bar off the prompt before the timer dies. <b>Locked is locked.</b></li>
+      <li>Sabotage lands. A shield blocks one hit. An empty bar still counts — it just counts as a freeze, and the room remembers.</li>
+      <li>First fighter to 8 bars triggers the last round. Then the room votes on the verses. Talk is cheap. Bars decide.</li>
+    </ol>
+  </div>
+</div>
+
+<div id="game" style="display:none">
+  <div class="panel">
+    Room <b id="roomCode"></b> · <span id="phase"></span> · Decks A:<span id="deckA"></span> S:<span id="deckS"></span>
+    <div id="players"></div>
+    <button id="start" style="display:none">Start the fight</button>
+  </div>
+
+  <div class="panel">
+    <h2>The Beat</h2> <span id="boardFx"></span>
+    <button id="soundBtn" class="alt">Sound: OFF</button>
+    <div class="beat" id="beat"></div>
+  </div>
+
+  <div class="panel" id="turnPanel">
+    <div id="turnLine"></div>
+    <div id="soundDecision" style="display:none">
+      <div class="indexcard">
+        <div class="t" id="drawnInfo">Sound card</div>
+        <div class="n" id="drawnName"></div>
+        <div class="x" id="drawnText"></div>
+      </div>
+      <button id="playSound">Play it</button>
+      <button id="binSound" class="alt">Bin it</button>
+    </div>
+    <div id="writeBox" style="display:none">
+      Prompt: <b id="promptText"></b><br>
+      <textarea id="barText" rows="2" maxlength="300" placeholder="Write your bar..."></textarea><br>
+      <button id="submitBar">Lock the bar</button>
+    </div>
+    <div id="discardBox" style="display:none">
+      Hand limit is 4 — tap cards to drop, then confirm.
+      <button id="confirmDiscard">Confirm discards</button>
+    </div>
+    <button id="endTurn" class="alt" style="display:none">End turn</button>
+    <div id="targetBox"></div>
+  </div>
+
+  <div class="panel" id="votePanel" style="display:none">
+    <h2>The Vote</h2>
+    <p style="font-size:13px; color:var(--ash)">Read the verses below. Pick the strongest — not your own. The room decides.</p>
+    <div id="voteList"></div>
+    <p id="voteStatus" style="font-size:12.5px; color:var(--ash)"></p>
+  </div>
+
+  <div class="panel">
+    <h2>Your Hand</h2>
+    <div class="hand" id="hand"></div>
+  </div>
+
+  <div class="panel"><h2>The Verses</h2><div id="verses"></div></div>
+  <div class="panel"><h2>Floor Feed</h2><div id="log"></div></div>
+</div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+<script src="/audio.js"></script>
+<script>
+const socket = io();
+let myId = null, S = null, myHand = [], myDrawn = null;
+let pendingPlay = null, discardSel = new Set(), myVote = null, appliedMatch = 0;
+socket.on('connect', () => myId = socket.id);
+const $ = id => document.getElementById(id);
+
+// Win streaks live in this browser (no accounts in v1).
+let streak = { cur: 0, best: 0 };
+try { streak = JSON.parse(localStorage.getItem('barnone_streak')) || streak; } catch (e) {}
+function saveStreak() { localStorage.setItem('barnone_streak', JSON.stringify(streak)); paintStreak(); }
+function paintStreak() { $('streakLine').textContent = streak.best > 0 ? `Your streak: ${streak.cur} · Best: ${streak.best}` : ''; }
+paintStreak();
+
+$('create').onclick = () => socket.emit('create_room', { name: $('name').value, streak: streak.cur }, r => r.ok ? enter(r.code) : $('err').textContent = r.error);
+$('joinBtn').onclick = () => socket.emit('join_room', { name: $('name').value, code: $('code').value, streak: streak.cur }, r => r.ok ? enter(r.code) : $('err').textContent = r.error);
+$('start').onclick = () => socket.emit('start_match', r => { if (r && !r.ok) alert(r.error); });
+function enter(code) { $('join').style.display = 'none'; $('game').style.display = 'block'; $('roomCode').textContent = code; }
+
+$('playSound').onclick = () => socket.emit('sound_decision', { play: true });
+$('binSound').onclick = () => socket.emit('sound_decision', { play: false });
+$('endTurn').onclick = () => socket.emit('end_turn');
+$('submitBar').onclick = () => socket.emit('submit_bar', { text: $('barText').value });
+let draftT = null;
+$('barText').addEventListener('input', () => { clearTimeout(draftT); draftT = setTimeout(() => socket.emit('draft', { text: $('barText').value }), 400); });
+$('confirmDiscard').onclick = () => socket.emit('discard_cards', { ids: [...discardSel] });
+
+socket.on('hand', h => { myHand = h.hand; myDrawn = h.drawnSound; render(); });
+socket.on('state', s => { S = s; render(); });
+
+setInterval(() => {
+  if (!S || !S.turn) return;
+  const left = Math.max(0, Math.ceil((S.turn.deadline - Date.now()) / 1000));
+  const el = $('cd'); if (el) el.textContent = left + 's';
+}, 250);
+
+function myTurnStage() { return S && S.turn && S.turn.playerId === myId ? S.turn.stage : null; }
+
+function playCard(card, extra = {}) {
+  socket.emit('play_card', { cardId: card.id, ...extra }, r => { if (r && !r.ok) alert(r.error); pendingPlay = null; render(); });
+}
+function onCardBtn(card) {
+  const stage = myTurnStage();
+  if (stage === 'discard') {
+    discardSel.has(card.id) ? discardSel.delete(card.id) : discardSel.add(card.id);
+    return render();
+  }
+  if (stage !== 'action') return;
+  if (pendingPlay) {
+    if (pendingPlay.id !== card.id) playCard(pendingPlay, { discardId: card.id });
+    pendingPlay = null; return render();
+  }
+  if (card.fx === 'swapCard') { pendingPlay = card; alert('Now tap the card you want to discard.'); return render(); }
+  if (card.targeted) {
+    $('targetBox').innerHTML = 'Target: ' + S.players.filter(p => p.id !== myId).map(p => `<button data-t="${p.id}">${p.name}</button>`).join('');
+    $('targetBox').querySelectorAll('button').forEach(b => b.onclick = () => { $('targetBox').innerHTML = ''; playCard(card, { targetId: b.dataset.t }); });
+    return;
+  }
+  playCard(card);
+}
+
+function cardLabel(c) {
+  if (c.type === 'bar') return { t: `Bar · ${c.difficulty}`, n: c.prompt, x: c.text };
+  if (c.type === 'flow') return { t: 'Flow challenge', n: c.name, x: c.req };
+  if (c.type === 'sound') return { t: `Sound · ${c.category}`, n: c.name, x: c.difficulty };
+  if (c.type === 'manipulation') return { t: 'Sound manipulation', n: c.name, x: c.text };
+  return { t: c.type, n: c.name, x: c.text };
+}
+
+function render() {
+  if (!S) return;
+  $('phase').textContent = S.phase;
+  $('deckA').textContent = S.decks.action; $('deckS').textContent = S.decks.sound;
+  $('players').innerHTML = S.players.map((p, i) =>
+    `<div>${S.turn && S.turn.playerId === p.id ? '▶ ' : ''}${p.name}${p.id === S.hostId ? ' (host)' : ''} — ${p.bars}/8 bars · ${p.handCount} cards${p.streak ? ` · streak ${p.streak}` : ''}${p.shield ? ' · 🛡' : ''}${p.connected ? '' : ' · gone'}</div>`).join('');
+  const canStart = (S.phase === 'lobby' || S.phase === 'finished') && S.hostId === myId && S.players.length >= 2;
+  $('start').style.display = canStart ? '' : 'none';
+  $('start').textContent = S.phase === 'finished' ? 'Run it back' : 'Start the fight';
+
+  // ---- voting & results ----
+  if (S.phase === 'voting' && S.matchId !== appliedMatch) myVote = null;
+  $('votePanel').style.display = S.phase === 'voting' ? '' : 'none';
+  if (S.phase === 'voting') {
+    $('voteList').innerHTML = '';
+    for (const p of S.players) {
+      if (p.id === myId) continue;
+      const b = document.createElement('button');
+      b.textContent = `Vote: ${p.name} (${p.bars} bars)`;
+      b.disabled = !!myVote;
+      b.onclick = () => { myVote = p.id; socket.emit('vote', { targetId: p.id }, r => { if (r && !r.ok) { myVote = null; alert(r.error); } render(); }); };
+      $('voteList').appendChild(b);
+    }
+    const voted = S.voting ? S.voting.votedIds.length : 0;
+    $('voteStatus').textContent = myVote ? `Your vote is in. ${voted}/${S.players.length} votes cast.` : `${voted}/${S.players.length} votes cast.`;
+  }
+  if (S.phase === 'finished' && S.results && appliedMatch !== S.matchId) {
+    appliedMatch = S.matchId;
+    if (S.results.winnerId === myId) { streak.cur++; streak.best = Math.max(streak.best, streak.cur); }
+    else streak.cur = 0;
+    saveStreak();
+    socket.emit('streak_update', { streak: streak.cur });
+  }
+
+  const cats = ['KICK','SNARE','HATS','BASS808','PIANO','STRINGS','GLITCH','INDUSTRIAL'];
+  $('beat').innerHTML = cats.map(c => S.activeSounds[c]
+    ? `<div class="slot on">${c}: <b>${S.activeSounds[c].name}</b> (${S.activeSounds[c].difficulty})</div>`
+    : `<div class="slot">${c}: —</div>`).join('');
+  $('boardFx').innerHTML = S.boardFx ? `<span class="stamp">${S.boardFx.name}${S.boardFx.detail ? ' on ' + S.boardFx.detail : ''}</span>` : '';
+
+  const stage = myTurnStage();
+  const cur = S.turn ? S.players.find(p => p.id === S.turn.playerId) : null;
+  $('turnLine').innerHTML = S.phase === 'finished' && S.results
+    ? `<span class="stamp">${(S.players.find(p => p.id === S.results.winnerId) || {}).name || ''} takes the room</span> ` + S.players.map(p => `${p.name}: ${S.results.counts[p.id] || 0}`).join(' · ')
+    : S.phase === 'voting'
+    ? '<span class="turn">The verses are in — vote.</span>'
+    : S.turn ? (stage ? `<span class="turn">Your move — ${stage}</span> · <span id="cd"></span>` : `${cur.name} is up — ${S.turn.stage} · <span id="cd"></span>`) : 'Lobby';
+
+  $('soundDecision').style.display = stage === 'sound' && myDrawn ? '' : 'none';
+  if (myDrawn) { const l = cardLabel(myDrawn); $('drawnName').textContent = l.n; $('drawnInfo').textContent = l.t; $('drawnText').textContent = l.x; }
+  $('writeBox').style.display = stage === 'writing' ? '' : 'none';
+  if (stage === 'writing') $('promptText').textContent = S.turn.prompt || '';
+  $('discardBox').style.display = stage === 'discard' ? '' : 'none';
+  $('endTurn').style.display = (stage === 'action' || stage === 'writing') ? '' : 'none';
+
+  $('hand').innerHTML = '';
+  for (const c of myHand) {
+    const l = cardLabel(c);
+    const d = document.createElement('div');
+    d.className = 'card k-' + c.type + (discardSel.has(c.id) || (pendingPlay && pendingPlay.id === c.id) ? ' sel' : '');
+    d.innerHTML = `<div class="t">${l.t}</div><div class="n">${l.n}</div><div class="x">${l.x}</div>`;
+    const b = document.createElement('button');
+    b.textContent = stage === 'discard' ? 'Drop' : 'Play';
+    b.disabled = !(stage === 'action' || stage === 'discard');
+    b.onclick = () => onCardBtn(c);
+    d.appendChild(b);
+    $('hand').appendChild(d);
+  }
+  $('verses').innerHTML = S.players.map(p => `<div class="verse"><b>${p.name}</b>${p.verse.map(v => `<div>${v.frozen ? '<span class="frozen">[froze]</span>' : v.text} <i style="color:#777">(${v.prompt}${v.reqs && v.reqs.length ? ' · ' + v.reqs.join('; ') : ''})</i></div>`).join('')}</div>`).join('');
+  $('log').innerHTML = S.log.map(l => `<div>${l}</div>`).join('');
+  syncAudio();
+}
+
+// ================= AUDIO (Tone.js) =================
+// Clients share the server's beat epoch, so step 0 lands at the same wall-clock
+// moment everywhere (up to clock skew). Pattern/fx changes promote on bar lines.
+let audioOn = false, beatStarted = false, curStep = 0;
+let liveSounds = {}, pendingSounds = {}, liveFx = undefined, pendingFx = undefined;
+let inst = {};
+
+function buildInstruments() {
+  const master = new Tone.Gain(0.8).toDestination();
+  const dark = new Tone.Filter(5200, 'lowpass').connect(master);
+  inst.KICK = new Tone.MembraneSynth({ octaves: 7, envelope: { attack: 0.001, decay: 0.38, sustain: 0.01, release: 0.4 } }).connect(dark);
+  inst.SNARE = new Tone.NoiseSynth({ noise: { type: 'pink' }, envelope: { attack: 0.001, decay: 0.17, sustain: 0 } }).connect(dark);
+  inst.HATS = new Tone.MetalSynth({ envelope: { attack: 0.001, decay: 0.06, release: 0.02 }, harmonicity: 5.1, modulationIndex: 24, resonance: 5200, octaves: 1.2 }).connect(new Tone.Gain(0.35).connect(dark));
+  inst.BASS808 = new Tone.MonoSynth({ oscillator: { type: 'sine' }, filter: { Q: 1, type: 'lowpass', rolloff: -24 }, envelope: { attack: 0.004, decay: 0.4, sustain: 0.4, release: 0.6 }, filterEnvelope: { attack: 0.001, decay: 0.2, sustain: 0.3, baseFrequency: 120, octaves: 2 } }).connect(dark);
+  inst.PIANO = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'triangle' }, envelope: { attack: 0.004, decay: 0.5, sustain: 0.12, release: 1.1 } }).connect(new Tone.Gain(0.5).connect(dark));
+  inst.STRINGS = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'sawtooth' }, envelope: { attack: 0.35, decay: 0.4, sustain: 0.55, release: 1.4 } }).connect(new Tone.Gain(0.28).connect(dark));
+  inst.GLITCH = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.03 } }).connect(new Tone.Gain(0.3).connect(dark));
+  inst.INDUSTRIAL = new Tone.MetalSynth({ envelope: { attack: 0.001, decay: 0.22, release: 0.08 }, harmonicity: 3.4, modulationIndex: 18, resonance: 900, octaves: 0.8 }).connect(new Tone.Gain(0.5).connect(dark));
+}
+
+function fireHit(h, time) {
+  const stepSec = 60 / Tone.Transport.bpm.value / 4;
+  const dur = Math.max(0.05, (h.l || 1) * stepSec * 0.95);
+  try {
+    switch (h.cat) {
+      case 'KICK': inst.KICK.triggerAttackRelease('C1', '8n', time, h.v); break;
+      case 'SNARE': inst.SNARE.triggerAttackRelease('16n', time, h.v); break;
+      case 'HATS': inst.HATS.triggerAttackRelease('G6', '32n', time, h.v * 0.7); break;
+      case 'BASS808': inst.BASS808.triggerAttackRelease(Tone.Frequency(h.n || 33, 'midi').toNote(), dur, time, h.v); break;
+      case 'PIANO': inst.PIANO.triggerAttackRelease(Tone.Frequency(h.n || 57, 'midi').toNote(), dur, time, h.v * 0.8); break;
+      case 'STRINGS': inst.STRINGS.triggerAttackRelease(Tone.Frequency(h.n || 69, 'midi').toNote(), dur, time, h.v * 0.8); break;
+      case 'GLITCH': inst.GLITCH.triggerAttackRelease(Tone.Frequency(72 + Math.floor(Math.random() * 12), 'midi').toNote(), '64n', time, h.v * 0.7); break;
+      case 'INDUSTRIAL': inst.INDUSTRIAL.triggerAttackRelease('C3', '16n', time, h.v); break;
+    }
+  } catch (e) { /* audio must never break the game */ }
+}
+
+function startBeat() {
+  beatStarted = true;
+  const tr = Tone.Transport;
+  tr.bpm.value = 92;
+  tr.scheduleRepeat((time) => {
+    if (curStep % 16 === 0) { // bar boundary: promote queued changes
+      liveSounds = pendingSounds;
+      if (pendingFx !== undefined) { liveFx = pendingFx; tr.bpm.rampTo(window.BarNoneAudio.tempoFor(liveFx), 0.1); }
+    }
+    let fx = liveFx;
+    const hits = window.BarNoneAudio.hitsAtStep(liveSounds, fx, curStep % 64);
+    for (const h of hits) fireHit(h, time);
+    if (fx && fx.name === 'GLITCH' && Math.random() < 0.10) { // scatter extra static
+      fireHit({ cat: 'GLITCH', n: null, l: 1, v: 0.5 }, time);
+    }
+    curStep++;
+  }, '16n');
+  const startAt = S && S.beat ? S.beat.startAt : Date.now();
+  tr.start('+' + Math.max(0.05, (startAt - Date.now()) / 1000));
+}
+
+function syncAudio() {
+  if (!S) return;
+  pendingSounds = S.activeSounds || {};
+  pendingFx = S.boardFx || null;
+  if (audioOn && !beatStarted && S.phase === 'playing') startBeat();
+  if (beatStarted && S.phase !== 'playing') { Tone.Transport.stop(); beatStarted = false; curStep = 0; }
+}
+
+$('soundBtn').onclick = async () => {
+  await Tone.start();
+  if (!Object.keys(inst).length) buildInstruments();
+  audioOn = !audioOn;
+  Tone.Destination.mute = !audioOn;
+  $('soundBtn').textContent = audioOn ? 'Sound: ON' : 'Sound: OFF';
+  if (audioOn) syncAudio();
+};
+</script>
+</body>
+</html>

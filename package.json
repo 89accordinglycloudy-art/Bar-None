@@ -1,0 +1,1 @@
+{"dependencies":{"express":"^4.19.2","socket.io":"^4.7.5"},"description":"BAR NONE — multiplayer lyric-writing card game (Handshake challenge build)","devDependencies":{"socket.io-client":"^4.7.5"},"main":"server.js","name":"bar-none","private":true,"scripts":{"start":"node server.js","test:smoke":"node test/smoke.js"},"version":"0.1.0"}
