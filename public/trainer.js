@@ -71,6 +71,7 @@
   function startSession() {
     S = {
       plan: T.sessionPlan(selShape), packId: selPack, topic: selTopic,
+      gen: T.newSessionGen(selPack, selTopic), // session variety memory (frames + imagery bags)
       bars: [], phase: 'write', repriseDone: false, swapIndex: null,
       cands: [], curChallenge: null, dealt: 0, passed: 0, lockWarned: false,
       startedAt: Date.now(), clockInt: null,
@@ -107,7 +108,7 @@
   }
 
   function dealCandidates() {
-    S.cands = T.generateCandidates(S.packId, S.topic, S.phase === 'reprise' ? 'hook' : curSection(), {});
+    S.cands = T.generateCandidates(S.packId, S.topic, S.phase === 'reprise' ? 'hook' : curSection(), { gen: S.gen });
     t$('trCands').innerHTML = '';
     S.cands.forEach((c) => {
       const d = document.createElement('div');

@@ -525,20 +525,136 @@ function fillFrame(frame, bank, rng) {
     return picked[slot];
   });
 }
+// ---------- Session generation state ----------
+// One state per writing session, created by newSessionGen. It gives the
+// generator a memory, which is what keeps a whole session from feeling like
+// the same bar reworded:
+// - Frames are dealt WITHOUT replacement per section pool (hook pool =
+//   shared + hook frames; verse pool = shared + verse frames). A frame can
+//   only come back after its whole pool has been dealt; then the pool
+//   reshuffles and dealing continues.
+// - Imagery comes off shuffle-bags, one per slot type (objects / places /
+//   verbs / details), built from the topic bank merged with the pack pool.
+//   A bag empties before any image repeats, then it reshuffles.
+// - Within one turn, the 3 candidates never share the same {obj} anchor
+//   when their frames carry one (see generateCandidates).
+// Re-deals consume the same state — variety is the point, so asking for a
+// fresh hand never deals the old one back.
+function shuffleCopy(arr, rng) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
+  return a;
+}
+function framesForSection(pack, section) {
+  const frames = [...(pack.framesAny || [])];
+  if (section === 'hook') frames.push(...(pack.framesHook || []));
+  else frames.push(...(pack.framesVerse || []));
+  return frames;
+}
+function poolKeyFor(section) { return section === 'hook' ? 'hook' : 'verse'; }
+function freshBag(state, key) {
+  return shuffleCopy([...new Set(state.bank[key] || [])], state.rng);
+}
+function newSessionGen(packId, topicName, seed) {
+  const pack = getPack(packId);
+  if (!pack) return null;
+  const topic = getTopic(pack, topicName);
+  const bank = effectiveBank(pack, topic);
+  const rng = seed === undefined || seed === null ? Math.random : mulberry32(seed);
+  const state = {
+    packId: pack.id, topicName: topic ? topic.name : '',
+    rng, bank, bags: {},
+    usedFrames: { hook: new Set(), verse: new Set() },
+    dealt: [], // { pool, frame, bar, anchor } for every accepted candidate
+  };
+  for (const key of Object.values(SLOT_KEYS)) state.bags[key] = freshBag(state, key);
+  return state;
+}
+function drawFromBag(state, key) {
+  const src = state.bank[key] || [];
+  if (!src.length) return '';
+  let bag = state.bags[key];
+  if (!bag || !bag.length) bag = state.bags[key] = freshBag(state, key);
+  const v = bag.pop();
+  if (!bag.length) state.bags[key] = freshBag(state, key); // refill for the next draw
+  return v;
+}
+// Fill one frame off the session bags. Each slot type is drawn once per bar,
+// so a slot repeated inside a frame reuses the same image (fillFrame
+// semantics). The anchor is the bar's {obj} image, if the frame has one.
+function fillFrameFromGen(frame, state) {
+  const picked = {};
+  const bar = frame.replace(/\{(obj|place|verb|det|T)\}/g, (m, slot) => {
+    if (slot === 'T') return state.bank.topicName;
+    if (!(slot in picked)) picked[slot] = drawFromBag(state, SLOT_KEYS[slot]);
+    return picked[slot];
+  });
+  return { bar, anchor: picked.obj || '' };
+}
+function pickFrameIndex(state, frames, poolKey) {
+  const used = state.usedFrames[poolKey];
+  if (used.size >= frames.length) used.clear(); // pool dealt through -> reshuffle
+  const avail = [];
+  for (let i = 0; i < frames.length; i++) if (!used.has(i)) avail.push(i);
+  return avail[Math.floor(state.rng() * avail.length)];
+}
+
 // Deal 3 distinct candidate bars for one turn. Frames are section-aware
 // (hook turns draw hook + shared frames; verse turns draw verse + shared).
 // Bars are aimed at 8-14 syllables; the generator retries fills to land in
 // range and falls back to the closest attempt rather than stalling.
+// With opts.gen (a session state from newSessionGen) the deal draws from
+// the session's frame pools and imagery bags, so nothing repeats across
+// the session until it has to. Without one, the deal is a one-off that
+// dedupes frames within the call only (original behavior).
 function generateCandidates(packId, topicName, section, opts = {}) {
-  const rng = opts.rng || Math.random;
   const pack = getPack(packId);
   if (!pack) return [];
+  const exclude = opts.exclude || new Set();
+  const frames = framesForSection(pack, section);
+
+  if (opts.gen) {
+    const state = opts.gen, poolKey = poolKeyFor(section);
+    const out = [], anchors = new Set();
+    const seen = new Set(state.dealt.map(d => d.bar)); // no exact bar twice in a session
+    let attempts = 0;
+    while (out.length < 3 && attempts < 150) {
+      attempts++;
+      const fi = pickFrameIndex(state, frames, poolKey);
+      state.usedFrames[poolKey].add(fi);
+      // Work the frame before giving it up: refill it with fresh imagery
+      // until a fill lands in syllable range with a free anchor, keeping
+      // the first clean out-of-range fill as the fallback (range is a
+      // target, not a wall). One fill per frame starved the long classic
+      // frames, whose fills run long — this is what burned pools early.
+      let accepted = null, fallback = null;
+      for (let r = 0; r < 6 && !accepted; r++) {
+        const filled = fillFrameFromGen(frames[fi], state);
+        if (!filled.bar || out.includes(filled.bar) || exclude.has(filled.bar) || seen.has(filled.bar)) continue;
+        if (filled.anchor && anchors.has(filled.anchor)) continue; // anchors stay split
+        const syl = barSyllables(filled.bar);
+        if (syl >= 8 && syl <= 14) accepted = filled;
+        else if (!fallback) fallback = filled;
+      }
+      const chosen = accepted || fallback;
+      if (!chosen) continue;
+      out.push(chosen.bar); seen.add(chosen.bar);
+      if (chosen.anchor) anchors.add(chosen.anchor);
+      state.dealt.push({ pool: poolKey, frame: frames[fi], bar: chosen.bar, anchor: chosen.anchor });
+      // A shared (framesAny) frame spent in one pool is spent for the whole
+      // session: mark it in the other pool too (the shared frames sit at the
+      // same indices in both pools). Its slot-free bars would be exact
+      // session duplicates anyway, and the other pool shouldn't burn picks
+      // discovering that.
+      if (fi < (pack.framesAny || []).length)
+        state.usedFrames[poolKey === 'hook' ? 'verse' : 'hook'].add(fi);
+    }
+    return out;
+  }
+
+  const rng = opts.rng || Math.random;
   const topic = getTopic(pack, topicName);
   const bank = effectiveBank(pack, topic);
-  const frames = [...(pack.framesAny || [])];
-  if (section === 'hook') frames.push(...(pack.framesHook || []));
-  else frames.push(...(pack.framesVerse || []));
-  const exclude = opts.exclude || new Set();
   const out = [], usedFrames = new Set();
   let attempts = 0;
   while (out.length < 3 && attempts < 90) {
@@ -720,7 +836,7 @@ const TrainerCore = {
   TONE_PACKS, CHALLENGE_DEFS, DRILLS,
   countSyllables, barSyllables, endWord, rhymeKey, mulberry32,
   getPack, getTopic, effectiveBank, topicWords, barOnTopic,
-  generateCandidates, dealChallenge, makeChallenge, checkChallenge,
+  newSessionGen, generateCandidates, dealChallenge, makeChallenge, checkChallenge,
   sessionPlan, applyReprise, scoreSong, formatSongText,
 };
 if (typeof window !== 'undefined') window.BarNoneTrainer = TrainerCore;
