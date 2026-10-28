@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BAR NONE — Underground Write Club</title>
+<style>
+  :root { --bone:#e6dfd0; --blood:#b3122e; --ash:#8f8a7d; --coal:#0a0a0b; --panel:#121212; }
+  * { box-sizing:border-box; }
+  body { font-family: ui-monospace, 'Courier New', monospace; background:var(--coal); color:var(--bone); margin:0; padding:18px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0.05 0 0 0 0 0.05 0 0 0 0 0.05 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  h1 { font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif; font-size:52px; letter-spacing:.14em; margin:2px 0 0; color:var(--bone); text-transform:uppercase; }
+  h1 span { color:var(--blood); }
+  .tag { color:var(--ash); letter-spacing:.3em; text-transform:uppercase; font-size:11px; margin:2px 0 14px; }
+  h2 { font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif; letter-spacing:.12em; text-transform:uppercase; font-size:19px; margin:0 0 8px; color:var(--bone); }
+  input, button, textarea { font-family:inherit; font-size:15px; padding:9px; margin:3px; background:#191919; color:var(--bone); border:1px solid #3a3a3a; border-radius:2px; }
+  button { cursor:pointer; background:var(--blood); border-color:#5e0a1a; color:#fff; text-transform:uppercase; letter-spacing:.08em; font-weight:bold; }
+  button:disabled { opacity:.35; cursor:default; }
+  button.alt { background:#222; border-color:#444; color:var(--bone); }
+  .wrap { max-width:880px; margin:0 auto; }
+  .panel { background:var(--panel); border:1px solid #2c2c2c; border-left:4px solid var(--blood); padding:14px; margin:12px 0; }
+  .panel.paper { background:var(--bone); color:#111; border:none; transform:rotate(-.4deg);
+    clip-path:polygon(0 1%, 4% 0, 97% 0, 100% 3%, 99.5% 96%, 96% 100%, 3% 99.5%, 0 97%); }
+  .panel.paper h2 { color:#111; }
+  .rules { font-size:13.5px; line-height:1.55; margin:0; padding-left:20px; }
+  .rules b { color:var(--blood); }
+  .hand { display:flex; flex-wrap:wrap; gap:10px; }
+  /* Action deck = sticky notes: scrawled, taped to the wall, slightly crooked */
+  .card { position:relative; width:176px; min-height:150px; color:#191914; padding:22px 10px 9px; border-radius:1px;
+    transform:rotate(-1deg); box-shadow:3px 5px 10px rgba(0,0,0,.55); }
+  .card:nth-child(3n) { transform:rotate(.8deg); }
+  .card:nth-child(4n) { transform:rotate(-.4deg); }
+  .card::before { content:''; position:absolute; top:-9px; left:50%; margin-left:-34px; width:68px; height:18px;
+    background:rgba(216,205,170,.5); border-left:1px dashed rgba(0,0,0,.15); border-right:1px dashed rgba(0,0,0,.15); transform:rotate(-2deg); }
+  .card.k-bar { background:linear-gradient(180deg,#ddd06a,#cfc05e); }
+  .card.k-flow { background:linear-gradient(180deg,#d9a7a0,#cd9a92); }
+  .card.k-help { background:linear-gradient(180deg,#b9c4a5,#aab696); }
+  .card.k-sabotage { background:linear-gradient(180deg,#c2b49a,#b3a489); }
+  .card.k-defense { background:linear-gradient(180deg,#a9bcc4,#99abb3); }
+  .card.k-wild { background:linear-gradient(180deg,#cbb2cc,#bda0bf); }
+  .card.sel { outline:3px solid var(--blood); }
+  .card .t { font-size:10px; text-transform:uppercase; letter-spacing:.12em; color:#6d0d1d; font-weight:bold; }
+  .card .n { font-weight:bold; margin:3px 0; font-size:16px; }
+  .card.k-bar .n { font-family:'Segoe Print','Bradley Hand',cursive; font-size:19px; line-height:1.15; }
+  .card .x { font-size:12px; color:#2c2c22; line-height:1.4; }
+  .card button { width:100%; margin:6px 0 0; }
+  /* Sound deck = index cards: ruled, typed, catalogued like a crate label */
+  .indexcard { position:relative; color:#161616; padding:12px 14px; max-width:430px; border-radius:2px;
+    background:repeating-linear-gradient(180deg,#e9e4d4 0 21px,#b9c4c9 21px 22px); box-shadow:3px 5px 12px rgba(0,0,0,.6); transform:rotate(.5deg); }
+  .indexcard::before { content:''; position:absolute; top:0; left:0; right:0; height:10px; background:#a33327; opacity:.75; }
+  .indexcard .t { font-size:10px; text-transform:uppercase; letter-spacing:.14em; color:#7a1020; font-weight:bold; margin-top:4px; }
+  .indexcard .n { font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif; font-size:24px; letter-spacing:.05em; margin:2px 0; }
+  .indexcard .x { font-size:12.5px; color:#333; }
+  .turn { color:#ff4d5e; font-weight:bold; text-transform:uppercase; letter-spacing:.06em; }
+  .beat { display:flex; flex-wrap:wrap; gap:6px; }
+  .slot { border:1px dashed #4a4a4a; padding:6px 10px; font-size:12.5px; color:var(--ash); }
+  .slot.on { border:none; color:#161616; transform:rotate(-.6deg); box-shadow:2px 3px 7px rgba(0,0,0,.55);
+    background:repeating-linear-gradient(180deg,#e9e4d4 0 15px,#b9c4c9 15px 16px); }
+  #log { font-size:12px; color:var(--ash); max-height:110px; overflow:auto; line-height:1.6; }
+  textarea { width:97%; background:#0f0f0f; }
+  .verse { font-size:13.5px; color:#cfc9b8; }
+  .verse div { margin:3px 0; }
+  .vbox { border:1px solid #2c2c2c; border-left:4px solid #4a4a4a; background:#0f0f0f; padding:10px 12px; margin:8px 0; font-size:13.5px; color:#cfc9b8; }
+  .vbox.up { border-left-color:var(--blood); }
+  .vbox .vhead { font-family:Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif; letter-spacing:.1em; text-transform:uppercase; font-size:14px; color:var(--bone); margin-bottom:5px; }
+  .vbox .vbar { margin:3px 0; }
+  .frozen { color:#ff4d5e; font-style:italic; }
+  .stamp { display:inline-block; border:2px solid var(--blood); color:#ff4d5e; padding:1px 8px; transform:rotate(-3deg); text-transform:uppercase; letter-spacing:.15em; font-size:11px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>BAR <span>NONE</span></h1>
+<p class="tag">Underground Write Club · Noctis Ritus Productions</p>
+
+<div id="join">
+  <div class="panel">
+    <h2>The Basement</h2>
+    <input id="name" placeholder="Your writer name" maxlength="20"><br>
+    <button id="create">Open a room</button>
+    <input id="code" placeholder="CODE" maxlength="4" style="text-transform:uppercase; width:90px">
+    <button id="joinBtn" class="alt">Join a room</button>
+    <br><button id="soloBtn" class="alt">Play solo — vs 2 ghost writers 👻</button>
+    <span style="color:var(--ash); font-size:12.5px">Alone? Ghost writers take the other seats: same cards, same beat, they write, sabotage, and vote.</span>
+    <br><button id="trainerBtn" class="alt">The Trainer 🎓 — build a full song solo</button>
+    <span style="color:var(--ash); font-size:12.5px">The writing room: pick a tone, draw a topic, and build a hook, a verse, or a whole song bar by bar — challenge cards, a real scorecard, and your own instrumental if you want it.</span>
+    <button id="rejoinBtn" class="alt" style="display:none"></button>
+    <p id="err" style="color:#ff4d5e"></p>
+    <p id="streakLine" style="color:var(--ash); font-size:12.5px"></p>
+  </div>
+  <div class="panel paper">
+    <h2>House Rules</h2>
+    <ol class="rules">
+      <li><b>First rule of BAR NONE:</b> you do not talk about BAR NONE. <i>(But we really, really want you to talk about BAR NONE.)</i></li>
+      <li>Race to <b>8 bars</b>. Every turn you draw a sound card and an action card.</li>
+      <li>Play the sound and the shared beat bends for everybody — or bin it. Playing it draws you an extra card.</li>
+      <li>One prompt card and one dirty trick per turn. Write your bar off the prompt before the timer dies — and when it dies, whatever you've typed is what you wrote. <b>Locked is locked.</b></li>
+      <li>Sabotage lands. A shield blocks one hit. An empty bar still counts — it just counts as a freeze, and the room remembers.</li>
+      <li>First writer to 8 bars triggers the last round. Then the room votes on the verses. Talk is cheap. Bars decide.</li>
+      <li><b>Solo?</b> Ghost writers take the other seats — same cards, same beat, they write, sabotage, and vote. Practice alone, play for real when the room fills.</li>
+    </ol>
+  </div>
+</div>
+
+<div id="game" style="display:none">
+  <div class="panel">
+    Room <b id="roomCode"></b> · <span id="phase"></span> · Decks A:<span id="deckA"></span> S:<span id="deckS"></span>
+    <div id="players"></div>
+    <div id="modeRow" style="margin-top:6px; font-size:13px"></div>
+    <button id="start" style="display:none">Start the fight</button>
+  </div>
+
+  <div class="panel">
+    <h2>The Beat</h2> <span id="boardFx"></span>
+    <button id="soundBtn" class="alt">Sound: OFF</button>
+    <div class="beat" id="beat"></div>
+  </div>
+
+  <div class="panel" id="turnPanel">
+    <div id="turnLine"></div>
+    <div id="soundDecision" style="display:none">
+      <div class="indexcard">
+        <div class="t" id="drawnInfo">Sound card</div>
+        <div class="n" id="drawnName"></div>
+        <div class="x" id="drawnText"></div>
+      </div>
+      <button id="playSound">Play it</button>
+      <button id="binSound" class="alt">Bin it</button>
+    </div>
+    <div id="writeBox" style="display:none">
+      Prompt: <b id="promptText"></b><br>
+      <textarea id="barText" rows="5" maxlength="600" placeholder="Write your bar..."></textarea><br>
+      <button id="submitBar">Lock the bar</button>
+    </div>
+    <div id="discardBox" style="display:none">
+      Hand limit is 4 — tap cards to drop, then confirm.
+      <button id="confirmDiscard">Confirm discards</button>
+    </div>
+    <button id="endTurn" class="alt" style="display:none">End turn</button>
+    <div id="targetBox"></div>
+  </div>
+
+  <div class="panel" id="votePanel" style="display:none">
+    <h2>The Vote</h2>
+    <p style="font-size:13px; color:var(--ash)">Read the verses below. Pick the strongest — not your own. The room decides.</p>
+    <div id="voteList"></div>
+    <p id="voteStatus" style="font-size:12.5px; color:var(--ash)"></p>
+  </div>
+
+  <div class="panel">
+    <h2>Your Hand</h2>
+    <div class="hand" id="hand"></div>
+  </div>
+
+  <div class="panel"><h2>The Verses</h2>
+    <button id="copyVerse" class="alt" style="display:none">Copy my verse 📋</button>
+    <button id="emailVerse" class="alt" style="display:none">Email it ✉️</button>
+    <span id="copyMsg" style="color:var(--ash); font-size:12.5px"></span>
+    <div id="emailHint" style="display:none; color:var(--ash); font-size:12.5px; margin-top:4px">Email opens pre-filled to Noctis Ritus Productions — your verse lands with us, and the sent copy stays in your outbox for you.</div>
+    <div id="verses"></div></div>
+  <div class="panel"><h2>Floor Feed</h2><div id="log"></div></div>
+</div>
+</div>
+
+<div id="trainer" style="display:none">
+  <div class="panel" id="trSetupPanel">
+    <h2>The Trainer — pick your shape</h2>
+    <div id="trShapes">
+      <button class="alt" data-shape="hook">Hook — 8 bars</button>
+      <button class="alt" data-shape="verse">Verse — 8 bars</button>
+      <button class="alt" data-shape="song">Full Song — 20 bars</button>
+    </div>
+    <div id="trShapeNote" style="font-size:13px; margin-top:4px"></div>
+    <h2 style="margin-top:14px">Tone pack</h2>
+    <div id="trPacks"></div>
+    <div id="trPackNote" style="color:var(--ash); font-size:12.5px"></div>
+    <h2 style="margin-top:14px">Topic</h2>
+    <div style="font-family:Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif; font-size:30px; letter-spacing:.06em" id="trTopicName">—</div>
+    <button id="trRedraw" class="alt">Draw a new topic</button>
+    <button id="trStart">Start writing</button>
+    <button id="trExit" class="alt">Back to the basement</button>
+    <p style="color:var(--ash); font-size:12.5px">No clock on your turns in here — it's a writing room, not a race. The tool deals you three scaffold bars a turn; you pick one, bend it in the box, or write your own. Challenge cards land every fifth bar.</p>
+  </div>
+
+  <div class="panel">
+    <h2>The Beat</h2>
+    <button id="trBeatBtn" class="alt">Beat: OFF</button>
+    <button id="trSrcClub" class="alt">Club beat</button>
+    <button id="trSrcMine" class="alt">My instrumental</button>
+    <div id="trUploadRow" style="display:none; margin-top:8px">
+      <input type="file" id="trFile" accept=".mp3,.wav,.m4a,.ogg,audio/mpeg,audio/wav,audio/mp4,audio/ogg">
+      <div style="font-size:12.5px; color:var(--ash)">Stays on your device — the file is never uploaded and never stored.</div>
+      <label style="font-size:13px"><input type="checkbox" id="trLoop" checked style="width:auto"> Loop it</label>
+      <label style="font-size:13px">BPM (optional): <input id="trBpm" type="number" min="40" max="240" placeholder="92" style="width:74px"></label>
+      <div id="trFileInfo" style="font-size:12.5px; color:var(--ash)"></div>
+    </div>
+    <div id="trBeatMsg" style="color:#ff4d5e; font-size:13px"></div>
+    <div id="trBeatNote" style="font-size:12.5px; color:var(--ash)"></div>
+  </div>
+
+  <div class="panel" id="trWrite" style="display:none">
+    <h2>Writing</h2>
+    <div id="trProg" style="font-size:13.5px; margin-bottom:6px"></div>
+    <div id="trChallenge" class="chal" style="display:none"></div>
+    <div id="trReprise" style="display:none; margin:8px 0"></div>
+    <div class="hand" id="trCands"></div>
+    <button id="trRedeal" class="alt">None of these — deal 3 new ones</button>
+    <textarea id="trEdit" rows="3" maxlength="300" placeholder="Pick a card above to load it here and make it yours — or write your own bar from scratch."></textarea>
+    <div id="trSyl" style="font-size:12.5px; color:var(--ash)"></div>
+    <label id="trAttestRow" style="display:none; font-size:13.5px"><input type="checkbox" id="trAttest" style="width:auto"> My bar does the challenge — on my honor</label><br>
+    <button id="trLock">Lock this bar</button>
+    <span id="trMsg" style="color:#ff4d5e; font-size:13px"></span>
+  </div>
+
+  <div class="panel" id="trSoFar" style="display:none"><h2>The song so far</h2><div id="trBars" class="vbox"></div></div>
+
+  <div class="panel" id="trScore" style="display:none">
+    <h2>Scorecard</h2>
+    <div id="trScoreBody"></div>
+    <pre class="songtext" id="trSongText"></pre>
+    <button id="trCopy">Copy the song</button>
+    <span id="trCopyMsg" style="color:var(--ash); font-size:12.5px"></span>
+    <button id="trAgain" class="alt">Run it again</button>
+    <button id="trExit2" class="alt">Back to the basement</button>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+<script src="/audio.js"></script>
+<script>
+const socket = io();
+let myId = null, S = null, myHand = [], myDrawn = null;
+let pendingPlay = null, discardSel = new Set(), myVote = null, appliedMatch = 0, lastWriteKey = null;
+socket.on('connect', () => { myId = socket.id; sampleClock(); });
+
+// Clock sync: estimate how far this device's clock sits from the server's,
+// keeping the lowest-latency sample. Beat stamps are server times; without
+// this, a phone and a PC run the "same" beat at different moments.
+let clockOffset = 0, bestRtt = Infinity;
+function serverNow() { return Date.now() + clockOffset; }
+function sampleClock() {
+  const t0 = Date.now();
+  socket.emit('time_ping', {}, (r) => {
+    if (!r || !r.t) return;
+    const t1 = Date.now(), rtt = t1 - t0;
+    if (rtt < bestRtt) { bestRtt = rtt; clockOffset = r.t - (t0 + t1) / 2; }
+  });
+}
+setInterval(sampleClock, 20000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) sampleClock(); });
+const $ = id => document.getElementById(id);
+
+// Win streaks live in this browser (no accounts in v1).
+let streak = { cur: 0, best: 0 };
+try { streak = JSON.parse(localStorage.getItem('barnone_streak')) || streak; } catch (e) {}
+function saveStreak() { localStorage.setItem('barnone_streak', JSON.stringify(streak)); paintStreak(); }
+function paintStreak() { $('streakLine').textContent = streak.best > 0 ? `Your streak: ${streak.cur} · Best: ${streak.best}` : ''; }
+paintStreak();
+
+$('create').onclick = () => socket.emit('create_room', { name: $('name').value, streak: streak.cur }, r => r.ok ? enter(r.code) : $('err').textContent = r.error);
+$('soloBtn').onclick = () => socket.emit('create_solo', { name: $('name').value, streak: streak.cur, bots: 2 }, r => r.ok ? enter(r.code) : $('err').textContent = r.error);
+$('joinBtn').onclick = () => {
+  const name = $('name').value, code = $('code').value;
+  socket.emit('join_room', { name, code, streak: streak.cur }, r => {
+    if (r.ok) return enter(r.code);
+    if (r.error === 'Match already started') {
+      // Dropped mid-match? Try to reclaim the seat under this name.
+      socket.emit('rejoin_room', { name, code }, r2 => r2.ok ? enter(r2.code) : $('err').textContent = r.error);
+    } else $('err').textContent = r.error;
+  });
+};
+$('start').onclick = () => socket.emit('start_match', r => { if (r && !r.ok) alert(r.error); });
+function enter(code) {
+  $('join').style.display = 'none'; $('game').style.display = 'block'; $('roomCode').textContent = code;
+  try { localStorage.setItem('barnone_session', JSON.stringify({ code, name: $('name').value })); } catch (e) {}
+}
+// If this browser was in a match, offer the way back in.
+try {
+  const sess = JSON.parse(localStorage.getItem('barnone_session') || 'null');
+  if (sess && sess.code) {
+    const b = $('rejoinBtn');
+    b.style.display = ''; b.textContent = `Rejoin room ${sess.code}`;
+    b.onclick = () => socket.emit('rejoin_room', { name: sess.name, code: sess.code }, r => {
+      if (r.ok) { $('name').value = sess.name; enter(r.code); }
+      else { $('err').textContent = r.error; localStorage.removeItem('barnone_session'); b.style.display = 'none'; }
+    });
+  }
+} catch (e) {}
+
+$('playSound').onclick = () => socket.emit('sound_decision', { play: true });
+$('binSound').onclick = () => socket.emit('sound_decision', { play: false });
+$('endTurn').onclick = () => socket.emit('end_turn');
+$('submitBar').onclick = () => { socket.emit('submit_bar', { text: $('barText').value }); $('barText').value = ''; lastWriteKey = null; };
+let draftT = null;
+$('barText').addEventListener('input', () => { clearTimeout(draftT); draftT = setTimeout(() => socket.emit('draft', { text: $('barText').value }), 400); });
+$('confirmDiscard').onclick = () => socket.emit('discard_cards', { ids: [...discardSel] });
+
+// Copy-my-verse: one click puts the player's whole verse on the clipboard,
+// prompts included, with the game link in the footer — every paste is an ad.
+function myVerseText() {
+  const me = S && S.players.find(p => p.id === myId);
+  if (!me || !me.verse.length) return '';
+  const lines = me.verse.map((v, i) => `${i + 1}. ${v.frozen ? '[froze]' : v.text} (${v.prompt})`);
+  return `${me.name} — BAR NONE verse (${me.verse.length}/8 bars)\n\n${lines.join('\n')}\n\nWritten live in BAR NONE · Underground Write Club — play free: https://bar-none.onrender.com`;
+}
+$('copyVerse').onclick = async () => {
+  const text = myVerseText();
+  if (!text) return;
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; }
+  catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { ok = document.execCommand('copy'); } catch (e2) {}
+    ta.remove();
+  }
+  $('copyMsg').textContent = ok ? 'Copied — paste it anywhere.' : 'Copy failed — long-press the verse text instead.';
+  setTimeout(() => { $('copyMsg').textContent = ''; }, 3000);
+};
+// Email it — BOTH ways (Nate's call): the player's mail app opens pre-filled
+// to NRP's business inbox, so the verse lands with us AND the sent copy
+// stays in the player's own outbox. No server mail service needed (v1);
+// a true auto-send is the later upgrade if the mail-app step proves leaky.
+$('emailVerse').onclick = () => {
+  const text = myVerseText();
+  if (!text) return;
+  const me = S && S.players.find(p => p.id === myId);
+  const subject = `My BAR NONE verse — ${me ? me.name : 'a writer'}`;
+  window.location.href = `mailto:ngilmore@noctisritus.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`;
+};
+
+socket.on('hand', h => { myHand = h.hand; myDrawn = h.drawnSound; render(); });
+socket.on('state', s => { S = s; render(); });
+
+setInterval(() => {
+  if (!S || !S.turn) return;
+  const left = Math.max(0, Math.ceil((S.turn.deadline - serverNow()) / 1000));
+  const el = $('cd'); if (el) el.textContent = left + 's';
+}, 250);
+
+function myTurnStage() { return S && S.turn && S.turn.playerId === myId ? S.turn.stage : null; }
+
+function playCard(card, extra = {}) {
+  socket.emit('play_card', { cardId: card.id, ...extra }, r => { if (r && !r.ok) alert(r.error); pendingPlay = null; render(); });
+}
+function onCardBtn(card) {
+  const stage = myTurnStage();
+  if (stage === 'discard') {
+    discardSel.has(card.id) ? discardSel.delete(card.id) : discardSel.add(card.id);
+    return render();
+  }
+  if (stage !== 'action') return;
+  if (pendingPlay) {
+    if (pendingPlay.id !== card.id) playCard(pendingPlay, { discardId: card.id });
+    pendingPlay = null; return render();
+  }
+  if (card.fx === 'swapCard') { pendingPlay = card; alert('Now tap the card you want to discard.'); return render(); }
+  if (card.targeted) {
+    $('targetBox').innerHTML = 'Target: ' + S.players.filter(p => p.id !== myId).map(p => `<button data-t="${p.id}">${p.name}</button>`).join('');
+    $('targetBox').querySelectorAll('button').forEach(b => b.onclick = () => { $('targetBox').innerHTML = ''; playCard(card, { targetId: b.dataset.t }); });
+    return;
+  }
+  playCard(card);
+}
+
+function cardLabel(c) {
+  if (c.type === 'bar') return { t: `Bar · ${c.difficulty}`, n: c.prompt, x: c.text };
+  if (c.type === 'flow') return { t: 'Flow challenge', n: c.name, x: c.req };
+  if (c.type === 'sound') return { t: `Sound · ${c.category}`, n: c.name, x: c.difficulty };
+  if (c.type === 'manipulation') return { t: 'Sound manipulation', n: c.name, x: c.text };
+  return { t: c.type, n: c.name, x: c.text };
+}
+
+function render() {
+  if (!S) return;
+  $('phase').textContent = S.phase;
+  $('deckA').textContent = S.decks.action; $('deckS').textContent = S.decks.sound;
+  $('players').innerHTML = S.players.map((p, i) =>
+    `<div>${S.turn && S.turn.playerId === p.id ? '▶ ' : ''}${p.name}${p.isBot ? ' 👻 (ghost)' : ''}${p.id === S.hostId ? ' (host)' : ''} — ${p.bars}/8 bars · ${p.handCount} cards${p.streak ? ` · streak ${p.streak}` : ''}${p.shield ? ' · 🛡' : ''}${p.connected ? '' : ' · gone'}</div>`).join('');
+  const canStart = (S.phase === 'lobby' || S.phase === 'finished') && S.hostId === myId && S.players.length >= 2;
+  $('start').style.display = canStart ? '' : 'none';
+  $('start').textContent = S.phase === 'finished' ? 'Run it back' : 'Start the fight';
+
+  // Pace: host picks in the lobby; everybody sees the current pace.
+  const paceTxt = S.mode === 'competition' ? 'COMPETITION — 12s to decide · 40s to write' : 'Basement pace — 45s to decide · 60s to write';
+  if (S.phase === 'lobby' && S.hostId === myId) {
+    $('modeRow').innerHTML = `Pace: <button class="alt" data-m="basement" ${S.mode !== 'competition' ? 'disabled' : ''}>Basement</button> <button class="alt" data-m="competition" ${S.mode === 'competition' ? 'disabled' : ''}>Competition</button> <span style="color:var(--ash)">${paceTxt}</span>`;
+    $('modeRow').querySelectorAll('button').forEach(b => b.onclick = () => socket.emit('set_mode', { mode: b.dataset.m }, r => { if (r && !r.ok) alert(r.error); }));
+  } else {
+    $('modeRow').textContent = 'Pace: ' + paceTxt;
+  }
+
+  // ---- voting & results ----
+  if (S.phase === 'voting' && S.matchId !== appliedMatch) myVote = null;
+  $('votePanel').style.display = S.phase === 'voting' ? '' : 'none';
+  if (S.phase === 'voting') {
+    $('voteList').innerHTML = '';
+    for (const p of S.players) {
+      if (p.id === myId) continue;
+      const b = document.createElement('button');
+      b.textContent = `Vote: ${p.name} (${p.bars} bars)`;
+      b.disabled = !!myVote;
+      b.onclick = () => { myVote = p.id; socket.emit('vote', { targetId: p.id }, r => { if (r && !r.ok) { myVote = null; alert(r.error); } render(); }); };
+      $('voteList').appendChild(b);
+    }
+    const voted = S.voting ? S.voting.votedIds.length : 0;
+    $('voteStatus').textContent = myVote ? `Your vote is in. ${voted}/${S.players.length} votes cast.` : `${voted}/${S.players.length} votes cast.`;
+  }
+  if (S.phase === 'finished' && S.results && appliedMatch !== S.matchId) {
+    appliedMatch = S.matchId;
+    if (S.results.winnerId === myId) { streak.cur++; streak.best = Math.max(streak.best, streak.cur); }
+    else streak.cur = 0;
+    saveStreak();
+    socket.emit('streak_update', { streak: streak.cur });
+  }
+
+  const cats = ['KICK','SNARE','HATS','BASS808','PIANO','STRINGS','GLITCH','INDUSTRIAL'];
+  $('beat').innerHTML = cats.map(c => S.activeSounds[c]
+    ? `<div class="slot on">${c}: <b>${S.activeSounds[c].name}</b> (${S.activeSounds[c].difficulty})</div>`
+    : `<div class="slot">${c}: —</div>`).join('');
+  $('boardFx').innerHTML = S.boardFx ? `<span class="stamp">${S.boardFx.name}${S.boardFx.detail ? ' on ' + S.boardFx.detail : ''}</span>` : '';
+
+  const stage = myTurnStage();
+  const cur = S.turn ? S.players.find(p => p.id === S.turn.playerId) : null;
+  $('turnLine').innerHTML = S.phase === 'finished' && S.results
+    ? `<span class="stamp">${(S.players.find(p => p.id === S.results.winnerId) || {}).name || ''} takes the room</span> ` + S.players.map(p => `${p.name}: ${S.results.counts[p.id] || 0}`).join(' · ')
+    : S.phase === 'voting'
+    ? '<span class="turn">The verses are in — vote.</span>'
+    : S.turn ? (stage ? `<span class="turn">Your move — ${stage}</span> · <span id="cd"></span>` : `${cur.name} is up — ${S.turn.stage} · <span id="cd"></span>`) : 'Lobby';
+
+  $('soundDecision').style.display = stage === 'sound' && myDrawn ? '' : 'none';
+  if (myDrawn) { const l = cardLabel(myDrawn); $('drawnName').textContent = l.n; $('drawnInfo').textContent = l.t; $('drawnText').textContent = l.x; }
+  $('writeBox').style.display = stage === 'writing' ? '' : 'none';
+  if (stage === 'writing') {
+    $('promptText').textContent = S.turn.prompt || '';
+    // Fresh box for every bar: without this the last bar's text stays in the
+    // box and the next submission repeats the whole verse so far.
+    const wk = S.matchId + ':' + S.turn.deadline;
+    if (lastWriteKey !== wk) { lastWriteKey = wk; $('barText').value = ''; }
+  }
+  $('discardBox').style.display = stage === 'discard' ? '' : 'none';
+  $('endTurn').style.display = (stage === 'action' || stage === 'writing') ? '' : 'none';
+
+  $('hand').innerHTML = '';
+  for (const c of myHand) {
+    const l = cardLabel(c);
+    const d = document.createElement('div');
+    d.className = 'card k-' + c.type + (discardSel.has(c.id) || (pendingPlay && pendingPlay.id === c.id) ? ' sel' : '');
+    d.innerHTML = `<div class="t">${l.t}</div><div class="n">${l.n}</div><div class="x">${l.x}</div>`;
+    const b = document.createElement('button');
+    b.textContent = stage === 'discard' ? 'Drop' : 'Play';
+    b.disabled = !(stage === 'action' || stage === 'discard');
+    b.onclick = () => onCardBtn(c);
+    d.appendChild(b);
+    $('hand').appendChild(d);
+  }
+  const mine = S.players.find(p => p.id === myId);
+  $('copyVerse').style.display = mine && mine.verse.length ? '' : 'none';
+  $('emailVerse').style.display = mine && mine.verse.length ? '' : 'none';
+  $('emailHint').style.display = mine && mine.verse.length ? '' : 'none';
+  $('verses').innerHTML = S.players.map(p => {
+    const up = S.turn && S.turn.playerId === p.id;
+    const head = `${p.id === myId ? 'Your verse — ' : ''}${p.name} · ${p.verse.length}/8 bars`;
+    const bars = p.verse.length
+      ? p.verse.map(v => `<div class="vbar">${v.frozen ? '<span class="frozen">[froze]</span>' : v.text} <i style="color:#777">(${v.prompt}${v.reqs && v.reqs.length ? ' · ' + v.reqs.join('; ') : ''})</i></div>`).join('')
+      : '<div class="vbar" style="color:#777">No bars yet.</div>';
+    return `<div class="vbox${up ? ' up' : ''}"><div class="vhead">${head}</div>${bars}</div>`;
+  }).join('');
+  $('log').innerHTML = S.log.map(l => `<div>${l}</div>`).join('');
+  syncAudio();
+}
+
+// ================= AUDIO (Tone.js) =================
+// The beat runs on server-stamped downbeats (see restamp() in server.js).
+// Every turn start and every board change ships a new stamp; a client that
+// sees one cuts the loop and restarts it from step 0 at the stamp's server
+// time. Clock offset correction makes that instant the same on every device,
+// and a player who enables sound mid-match joins the loop in phase.
+let audioOn = false;
+let liveSounds = {}, liveFx = null, curTempo = 92;
+let inst = {};
+let sched = null, schedTimer = null; // { id, stepIdx, nextAt } — nextAt is a server time (ms)
+
+// Real one-shot samples (rendered for the game — see tools/make-samples.js),
+// played through Samplers so pitched parts (808 / piano / strings) still
+// follow the pattern data. No more synth bleeps.
+function buildInstruments() {
+  const master = new Tone.Gain(0.9).toDestination();
+  const mk = (urls, gain) => {
+    const s = new Tone.Sampler({ urls, baseUrl: '/samples/' });
+    if (gain && gain !== 1) s.connect(new Tone.Gain(gain).connect(master)); else s.connect(master);
+    return s;
+  };
+  inst.KICK = mk({ C1: 'kick.wav' });
+  inst.SNARE = mk({ C2: 'snare.wav' });
+  inst.HATS = mk({ C3: 'hat.wav', D3: 'hat-open.wav' }, 0.85);
+  inst.BASS808 = mk({ A1: 'bass808.wav' });
+  inst.PIANO = mk({ A3: 'piano.wav' }, 0.95);
+  inst.STRINGS = mk({ A4: 'strings.wav' }, 0.85);
+  inst.GLITCH = mk({ C4: 'glitch.wav' }, 0.9);
+  inst.INDUSTRIAL = mk({ C3: 'industrial.wav' });
+}
+
+const BASE_NOTE = { KICK: 'C1', SNARE: 'C2', BASS808: 'A1', PIANO: 'A3', STRINGS: 'A4', GLITCH: 'C4', INDUSTRIAL: 'C3' };
+function fireHit(h, time) {
+  const v = inst[h.cat];
+  if (!v || !v.loaded) return;
+  try {
+    if (h.cat === 'HATS') { // longer written hits ring the open hat
+      v.triggerAttackRelease((h.l || 1) >= 2 ? 'D3' : 'C3', 0.1, time, h.v * 0.8);
+    } else if (h.cat === 'BASS808' || h.cat === 'PIANO' || h.cat === 'STRINGS') {
+      const stepSec = 60 / curTempo / 4;
+      const dur = Math.max(0.08, (h.l || 1) * stepSec * 0.95);
+      v.triggerAttackRelease(Tone.Frequency(h.n || 60, 'midi').toNote(), dur, time, h.v);
+    } else if (h.cat === 'GLITCH') { // same tear, random tape speed
+      const notes = ['A3', 'C4', 'D4', 'F4', 'G4', 'C5'];
+      v.triggerAttackRelease(notes[Math.floor(Math.random() * notes.length)], 0.15, time, h.v * 0.8);
+    } else {
+      v.triggerAttackRelease(BASE_NOTE[h.cat], 0.25, time, h.v);
+    }
+  } catch (e) { /* audio must never break the game */ }
+}
+
+function ensureScheduler() { if (!schedTimer) schedTimer = setInterval(schedulerTick, 40); }
+
+function schedulerTick() {
+  if (!audioOn || !S || S.phase !== 'playing' || !S.beat) return;
+  const stamp = S.beat;
+  const fx = S.boardFx || null;
+  curTempo = window.BarNoneAudio.tempoFor(fx);
+  const stepMs = 60000 / curTempo / 4;
+  if (!sched || sched.id !== stamp.id) {
+    liveSounds = S.activeSounds || {}; liveFx = fx;
+    const nowS = serverNow();
+    let idx = 0, nextAt = stamp.startAt;
+    if (nowS > stamp.startAt) { idx = Math.floor((nowS - stamp.startAt) / stepMs); nextAt = stamp.startAt + (idx + 1) * stepMs; }
+    sched = { id: stamp.id, stepIdx: idx, nextAt };
+  }
+  while (sched.nextAt < serverNow() + 130) {
+    const step = sched.stepIdx % 64;
+    const t = Tone.now() + (sched.nextAt - serverNow()) / 1000;
+    for (const h of window.BarNoneAudio.hitsAtStep(liveSounds, liveFx, step)) fireHit(h, t);
+    if (liveFx && liveFx.name === 'GLITCH' && Math.random() < 0.10) fireHit({ cat: 'GLITCH', n: null, l: 1, v: 0.5 }, t);
+    sched.stepIdx++;
+    sched.nextAt += stepMs;
+    if (sched.nextAt < serverNow() - 500) { // tab slept or long stall: rejoin the grid in phase
+      const idx = Math.floor((serverNow() - stamp.startAt) / stepMs);
+      sched.stepIdx = idx; sched.nextAt = stamp.startAt + (idx + 1) * stepMs;
+    }
+  }
+}
+
+function syncAudio() {
+  if (!S) return;
+  if (S.phase !== 'playing') { sched = null; return; }
+  if (audioOn) ensureScheduler();
+}
+
+$('soundBtn').onclick = async () => {
+  await Tone.start();
+  if (!Object.keys(inst).length) {
+    buildInstruments();
+    $('soundBtn').textContent = 'Sound: LOADING';
+    $('soundBtn').disabled = true;
+    await Promise.race([Tone.loaded(), new Promise(r => setTimeout(r, 9000))]);
+    $('soundBtn').disabled = false;
+  }
+  audioOn = !audioOn;
+  Tone.Destination.mute = !audioOn;
+  $('soundBtn').textContent = audioOn ? 'Sound: ON' : 'Sound: OFF';
+  if (audioOn) syncAudio();
+};
+</script>
+<script src="/trainer-core.js"></script>
+<script src="/trainer.js"></script>
+</body>
+</html>
